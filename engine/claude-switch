@@ -1,0 +1,516 @@
+#!/usr/bin/python3 -I
+"""Engine for Claude Accounts.
+
+Saves the Claude desktop login of each account so you can switch back without
+signing in again, and can share sessions across accounts.
+
+Commands (all print JSON unless noted):
+  status                      accounts, saved logins, paused sessions, settings
+  list                        human-readable table (default for `claude-accounts`)
+  switch <account>            quit Claude, save this login, load <account>, open Claude
+  verify <account>            wait until Claude runs signed in as <account>
+  add                         quit Claude, save this login, open Claude signed out
+  share [--dry-run]           copy missing or newer sessions into the current account
+  tick                        periodic job: auto-save login, daily backup
+  backup                      copy all session lists to ~/Backups/claude-sessions
+  label [<account>] <name>    name an account (no account = current one)
+  forget <account>            delete the saved login of an account
+  hide|unhide <account>       hide an account from the list
+  set <key> <value>           change a setting (true/false or a number)
+  open-session <session-id>   open a session in Claude
+
+<account> is a full account UUID or its first 8 characters.
+"""
+import contextlib, datetime, fcntl, glob, json, os, re, shutil, sqlite3, subprocess, sys, time
+
+HOME = os.path.expanduser("~")
+APP = os.environ.get("CLAUDE_APP_DIR", f"{HOME}/Library/Application Support/Claude")
+SESS = os.path.join(APP, "claude-code-sessions")
+BASE = os.environ.get("CLAUDE_SWITCH_HOME", f"{HOME}/Library/Application Support/Claude Account Switcher")
+PROFILES = os.path.join(BASE, "profiles")
+SETTINGS = os.path.join(BASE, "settings.json")
+LOG = os.path.join(BASE, "switch.log")
+BACKUPS = os.environ.get("CLAUDE_SWITCH_BACKUPS", f"{HOME}/Backups/claude-sessions")
+OLD_LABELS = f"{HOME}/.claude/account-labels.txt"
+CLI_JSON = f"{HOME}/.claude.json"
+TEST = bool(os.environ.get("CLAUDE_SWITCH_TEST"))
+CLAUDE_BIN = "/Applications/Claude.app/Contents/MacOS/Claude"
+BUNDLE_ID = "com.anthropic.claudefordesktop"
+
+LOGIN_FILES = ["Cookies", "Cookies-journal"]
+LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
+CONFIG_KEYS = ["oauth:tokenCacheV2", "lastKnownAccountUuid"]
+DEFAULTS = {"shareSessions": False, "autoSaveLogins": True, "dailyBackup": True,
+            "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {}}
+
+os.umask(0o077)
+os.makedirs(PROFILES, exist_ok=True)
+
+
+class Fail(Exception):
+    pass
+
+
+# ---------- small helpers ----------
+
+def log(msg):
+    try:
+        if os.path.exists(LOG) and os.path.getsize(LOG) > 1_000_000:
+            os.replace(LOG, LOG + ".1")
+        with open(LOG, "a") as f:
+            f.write(f"{datetime.datetime.now():%F %T} {msg}\n")
+    except OSError:
+        pass
+
+
+def read_json(path, default=None):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+def write_json(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
+
+
+def settings():
+    s = dict(DEFAULTS)
+    s.update(read_json(SETTINGS, {}) or {})
+    s["labels"] = dict(s.get("labels") or {})
+    s["hidden"] = list(s.get("hidden") or [])
+    if os.path.exists(OLD_LABELS) and not s.get("importedV1Labels"):  # names from version 1
+        for line in open(OLD_LABELS):
+            p = line.rstrip("\n").split(" ", 1)
+            if len(p) == 2 and p[1].strip():
+                s["labels"].setdefault(p[0], p[1].strip())
+        s["importedV1Labels"] = True
+        write_json(SETTINGS, s)
+    return s
+
+
+def save_settings(s):
+    write_json(SETTINGS, s)
+
+
+@contextlib.contextmanager
+def lock():
+    f = open(os.path.join(BASE, "lock"), "w")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise Fail("Another switch is running. Wait for it to finish.")
+    try:
+        yield
+    finally:
+        fcntl.flock(f, fcntl.LOCK_UN)
+        f.close()
+
+
+def account_dirs():
+    """{account: [org folders]} from the session store."""
+    out = {}
+    for d in glob.glob(os.path.join(SESS, "*", "*")):
+        if os.path.isdir(d):
+            out.setdefault(os.path.basename(os.path.dirname(d)), []).append(d)
+    return out
+
+
+def known_accounts():
+    ids = set(account_dirs()) | {p for p in os.listdir(PROFILES) if not p.startswith(".")}
+    cur = current_account()
+    if cur:
+        ids.add(cur)
+    return ids
+
+
+def resolve(acc):
+    if not acc:
+        raise Fail("Give an account ID.")
+    m = [a for a in known_accounts() if a == acc or a.startswith(acc)]
+    if len(m) != 1:
+        raise Fail(f"Unknown or unclear account: {acc}")
+    return m[0]
+
+
+# ---------- Claude app state ----------
+
+def current_account():
+    return (read_json(os.path.join(APP, "config.json"), {}) or {}).get("lastKnownAccountUuid") or ""
+
+
+def claude_running():
+    if TEST:
+        return os.path.exists(os.path.join(APP, ".running"))
+    out = subprocess.run(["ps", "-axo", "comm"], capture_output=True, text=True).stdout
+    return CLAUDE_BIN in out.splitlines()
+
+
+def quit_claude():
+    if TEST or not claude_running():
+        return
+    subprocess.run(["osascript", "-e", f'tell application id "{BUNDLE_ID}" to quit'], capture_output=True)
+    for _ in range(60):
+        if not claude_running():
+            time.sleep(1)
+            return
+        time.sleep(0.5)
+    raise Fail("Claude did not quit. A dialog may be open in Claude. Quit it by hand, then try again.")
+
+
+def open_claude(url=None):
+    if TEST:
+        return
+    subprocess.run(["open", url] if url else ["open", "-b", BUNDLE_ID])
+
+
+def cookie_has_session(path):
+    if not os.path.exists(path):
+        return False
+    try:
+        con = sqlite3.connect(f"file:{path}?immutable=1", uri=True)
+        n = con.execute("select count(*) from cookies where host_key like '%claude.ai' and name='sessionKey'").fetchone()[0]
+        con.close()
+        return n > 0
+    except sqlite3.Error:
+        return False
+
+
+def has_login(app=APP):
+    cfg = read_json(os.path.join(app, "config.json"), {}) or {}
+    return bool(cfg.get("oauth:tokenCacheV2")) and cookie_has_session(os.path.join(app, "Cookies"))
+
+
+# ---------- saving and loading a login ----------
+
+def save_login(dest, mode):
+    """Copy the login of the desktop app into folder `dest`. mode: switch | auto."""
+    live = mode == "auto"
+    tmp = dest + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    os.makedirs(tmp)
+    for f in LOGIN_FILES:
+        src = os.path.join(APP, f)
+        if not os.path.exists(src):
+            continue
+        if live and f == "Cookies":  # consistent copy while Claude writes to it
+            s = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+            d = sqlite3.connect(os.path.join(tmp, f))
+            s.backup(d)
+            d.close(); s.close()
+        elif not (live and f.endswith("-journal")):
+            shutil.copy2(src, tmp)
+    for d in LOGIN_DIRS:
+        src = os.path.join(APP, d)
+        if os.path.isdir(src):
+            shutil.copytree(src, os.path.join(tmp, d), symlinks=True,
+                            ignore=shutil.ignore_patterns("LOCK"), ignore_dangling_symlinks=True,
+                            dirs_exist_ok=True)
+    cfg = read_json(os.path.join(APP, "config.json"), {}) or {}
+    write_json(os.path.join(tmp, "config-keys.json"), {k: cfg[k] for k in CONFIG_KEYS if k in cfg})
+    write_json(os.path.join(tmp, "meta.json"), {"savedAt": time.time(), "mode": mode})
+    shutil.rmtree(dest, ignore_errors=True)
+    os.replace(tmp, dest)
+
+
+def load_login(src):
+    """Replace the login of the desktop app with the one in `src` (None = signed out)."""
+    for f in LOGIN_FILES:
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(os.path.join(APP, f))
+    for d in LOGIN_DIRS:
+        shutil.rmtree(os.path.join(APP, d), ignore_errors=True)
+    keys = {}
+    if src:
+        for f in LOGIN_FILES:
+            if os.path.exists(os.path.join(src, f)):
+                shutil.copy2(os.path.join(src, f), APP)
+        for d in LOGIN_DIRS:
+            if os.path.isdir(os.path.join(src, d)):
+                shutil.copytree(os.path.join(src, d), os.path.join(APP, d), symlinks=True)
+        keys = read_json(os.path.join(src, "config-keys.json"), {}) or {}
+    path = os.path.join(APP, "config.json")
+    cfg = read_json(path, {}) or {}
+    for k in CONFIG_KEYS:
+        cfg.pop(k, None)
+    cfg.update(keys)
+    write_json(path, cfg)
+
+
+def profile_meta(acc):
+    return read_json(os.path.join(PROFILES, acc, "meta.json"))
+
+
+def save_current(mode="switch"):
+    cur = current_account()
+    if cur and has_login():
+        save_login(os.path.join(PROFILES, cur), mode)
+        log(f"saved login of {cur} ({mode})")
+    else:
+        log(f"no login to save (current={cur or '-'})")
+    if mode == "switch":  # exact copy of the state before a change, for recovery
+        save_login(os.path.join(BASE, "last-state"), "switch")
+
+
+# ---------- sessions ----------
+
+def share_into(acc, dry=False):
+    """Copy sessions that are missing or older in `acc`. Returns the count."""
+    dirs = account_dirs()
+    if not dirs.get(acc):
+        if dry:
+            return 0
+        raise Fail("This account has no session folder yet. Start one session in Claude, then share again.")
+    target = max(dirs[acc], key=os.path.getmtime)
+    n = 0
+    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
+        if f.startswith(os.path.join(SESS, acc) + os.sep):
+            continue
+        base = os.path.basename(f)
+        dst = os.path.join(target, base)
+        if os.path.exists(os.path.join(target, "deleted_" + base[len("local_"):-len(".json")])):
+            continue
+        if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(f) - 1:
+            continue
+        n += 1
+        if not dry:
+            shutil.copy2(f, dst)
+    log(f"share into {acc}: {n} sessions{' (dry run)' if dry else ''}")
+    return n
+
+
+def transcript_tail(cli_id, size=65536):
+    for p in glob.glob(f"{HOME}/.claude/projects/*/{cli_id}.jsonl"):
+        with open(p, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - size))
+            return f.read().decode("utf-8", "ignore").splitlines()
+    return []
+
+
+def paused_sessions(days=3):
+    """Sessions whose last turn ended on a usage-limit error."""
+    newest = {}
+    cutoff = time.time() - days * 86400
+    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
+        m = os.path.getmtime(f)
+        if m < cutoff:
+            continue
+        d = read_json(f, {}) or {}
+        sid = d.get("sessionId")
+        if sid and (sid not in newest or newest[sid][0] < m):
+            newest[sid] = (m, d, f)
+    out = []
+    for sid, (m, d, f) in newest.items():
+        if d.get("isArchived") or not d.get("cliSessionId"):
+            continue
+        last = None
+        for line in transcript_tail(d["cliSessionId"]):
+            with contextlib.suppress(ValueError):
+                e = json.loads(line)
+                if e.get("type") in ("assistant", "user"):
+                    last = e
+        if not last or last.get("type") != "assistant" or not last.get("isApiErrorMessage"):
+            continue
+        content = (last.get("message") or {}).get("content")
+        text = " ".join(c.get("text", "") for c in content if isinstance(c, dict)) if isinstance(content, list) else str(content)
+        if "limit" not in text.lower():
+            continue
+        reset = re.search(r"resets? ([^·\n]+)", text)
+        out.append({"id": sid, "title": d.get("title") or "Untitled", "account": f.split(os.sep)[-3],
+                    "cwd": d.get("cwd", ""), "message": text.strip()[:160],
+                    "resets": reset.group(1).strip() if reset else "", "stoppedAt": last.get("timestamp", "")})
+    out.sort(key=lambda x: x["stoppedAt"], reverse=True)
+    return out
+
+
+def backup(keep):
+    os.makedirs(BACKUPS, exist_ok=True)
+    dest = os.path.join(BACKUPS, f"{datetime.date.today():%Y-%m-%d}")
+    subprocess.run(["rsync", "-a", SESS + "/", dest + "/"], check=True)
+    days = sorted(d for d in os.listdir(BACKUPS) if re.fullmatch(r"\d{4}-\d\d-\d\d", d))
+    for old in days[:-keep] if keep > 0 else []:
+        shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
+    log(f"backup -> {dest}")
+    return dest
+
+
+# ---------- commands ----------
+
+def status():
+    s = settings()
+    cur = current_account()
+    cli = (read_json(CLI_JSON, {}) or {}).get("oauthAccount") or {}
+    labels = dict(s["labels"])
+    if cli.get("accountUuid") and cli.get("emailAddress"):
+        labels.setdefault(cli["accountUuid"], cli["emailAddress"])
+    dirs = account_dirs()
+    accounts = []
+    for a in known_accounts():
+        files = [f for d in dirs.get(a, []) for f in glob.glob(os.path.join(d, "local_*.json"))]
+        meta = profile_meta(a)
+        accounts.append({
+            "id": a, "name": labels.get(a, ""), "sessions": len(files),
+            "lastUsed": max((os.path.getmtime(f) for f in files), default=0),
+            "savedLogin": meta is not None, "savedAt": (meta or {}).get("savedAt", 0),
+            "savedMode": (meta or {}).get("mode", ""),
+            "current": a == cur, "hidden": a in s["hidden"],
+        })
+    accounts.sort(key=lambda x: (not x["current"], -x["sessions"], -x["lastUsed"], x["id"]))
+    return {"current": cur, "signedIn": has_login(), "claudeRunning": claude_running(),
+            "settings": {k: v for k, v in s.items() if k not in ("labels", "importedV1Labels")},
+            "accounts": accounts, "paused": paused_sessions()}
+
+
+def cmd_list():
+    st = status()
+    print(f"{'':2} {'ACCOUNT':9} {'SESSIONS':>8}  {'LOGIN':6} NAME")
+    for a in st["accounts"]:
+        mark = "->" if a["current"] else ""
+        login = "saved" if a["savedLogin"] else "-"
+        print(f"{mark:2} {a['id'][:8]:9} {a['sessions']:>8}  {login:6} {a['name'] or '(no name)'}")
+    print("\n-> = account the desktop app uses now.")
+    if st["paused"]:
+        print(f"\nStopped on usage limit: {len(st['paused'])}")
+        for p in st["paused"]:
+            print(f"  - {p['title']}  (resets {p['resets'] or '?'})")
+
+
+def switch(target):
+    target = resolve(target)
+    if not profile_meta(target):
+        raise Fail("No saved login for this account. Click Add account and sign in with it one time.")
+    with lock():
+        log(f"switch to {target}")
+        quit_claude()
+        save_current("switch")
+        load_login(os.path.join(PROFILES, target))
+        shared = share_into(target) if settings()["shareSessions"] and account_dirs().get(target) else 0
+        open_claude()
+    log(f"switched to {target}")
+    return {"ok": True, "account": target, "shared": shared}
+
+
+def verify(target, timeout=45):
+    target = resolve(target)
+    end = time.time() + timeout
+    while time.time() < end:
+        if claude_running() and current_account() == target and has_login():
+            time.sleep(8)  # Claude drops a bad login a few seconds after start
+            if current_account() == target and has_login():
+                return {"ok": True}
+        time.sleep(2)
+    if current_account() == target and has_login():
+        return {"ok": True}
+    log(f"verify failed for {target}")
+    return {"ok": False, "message": "Claude did not stay signed in. The saved login may have expired. Sign in again in Claude; the app saves the new login."}
+
+
+def add():
+    with lock():
+        log("add account")
+        quit_claude()
+        save_current("switch")
+        load_login(None)
+        open_claude()
+    return {"ok": True}
+
+
+def share(dry):
+    cur = current_account()
+    if not cur:
+        raise Fail("Not signed in.")
+    if dry:
+        return {"count": share_into(cur, dry=True)}
+    with lock():
+        backup(settings()["backupKeep"])
+        quit_claude()
+        try:
+            n = share_into(cur)
+        finally:
+            open_claude()
+    return {"count": n}
+
+
+def tick():
+    s = settings()
+    done = []
+    try:
+        with lock():
+            cur = current_account()
+            if s["autoSaveLogins"] and cur and claude_running() and has_login():
+                meta = profile_meta(cur)
+                if not meta or time.time() - meta.get("savedAt", 0) > 6 * 3600:
+                    save_login(os.path.join(PROFILES, cur), "auto")
+                    log(f"auto-saved login of {cur}")
+                    done.append("login")
+            today = os.path.join(BACKUPS, f"{datetime.date.today():%Y-%m-%d}")
+            if s["dailyBackup"] and not os.path.isdir(today) and os.path.isdir(SESS):
+                backup(s["backupKeep"])
+                done.append("backup")
+    except Fail:
+        pass  # a switch is running; try next time
+    return {"done": done}
+
+
+def main(argv):
+    cmd, args = (argv[1] if len(argv) > 1 else "status"), argv[2:]
+    if os.path.basename(argv[0]) == "claude-accounts" and len(argv) == 1:
+        cmd = "list"
+    s = settings()
+    if cmd == "status":
+        out = status()
+    elif cmd == "list":
+        return cmd_list()
+    elif cmd == "switch":
+        out = switch(args[0] if args else "")
+    elif cmd == "verify":
+        out = verify(args[0] if args else "")
+    elif cmd == "add":
+        out = add()
+    elif cmd == "share":
+        out = share("--dry-run" in args)
+    elif cmd == "tick":
+        out = tick()
+    elif cmd == "backup":
+        out = {"path": backup(s["backupKeep"])}
+    elif cmd == "label":
+        acc, name = (resolve(args[0]), args[1]) if len(args) > 1 else (current_account(), args[0] if args else "")
+        if name.strip():
+            s["labels"][acc] = name.strip()
+        else:
+            s["labels"].pop(acc, None)
+        save_settings(s); out = {"ok": True}
+    elif cmd == "forget":
+        acc = resolve(args[0] if args else "")
+        shutil.rmtree(os.path.join(PROFILES, acc), ignore_errors=True)
+        log(f"forgot login of {acc}"); out = {"ok": True}
+    elif cmd in ("hide", "unhide"):
+        acc = resolve(args[0] if args else "")
+        h = set(s["hidden"]); (h.add if cmd == "hide" else h.discard)(acc)
+        s["hidden"] = sorted(h); save_settings(s); out = {"ok": True}
+    elif cmd == "set":
+        if len(args) != 2 or args[0] not in DEFAULTS or args[0] in ("hidden", "labels"):
+            raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in ("hidden", "labels")) + "> <value>")
+        v = args[1].lower()
+        s[args[0]] = v in ("1", "true", "on", "yes") if isinstance(DEFAULTS[args[0]], bool) else int(v)
+        save_settings(s); out = {"ok": True}
+    elif cmd == "open-session":
+        open_claude(f"claude://claude.ai/epitaxy/{args[0]}"); out = {"ok": True}
+    else:
+        print(__doc__); return 1
+    print(json.dumps(out))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv))
+    except Fail as e:
+        log(f"ERROR {e}")
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
