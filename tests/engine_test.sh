@@ -198,4 +198,34 @@ check "gh error is reported, not a failure" 'GH_FAIL=1 E update-check 1.0.0 | gr
 check "update-install downloads the installer" 'E update-install v1.2.0 | grep -q install-release.sh'
 check "update-install refuses a bad tag" '! E update-install "v1; rm -rf /" >/dev/null'
 
+echo "debug report"
+# own fake Mac with real-shaped account IDs (last block, so the env can change)
+R="$T/report"; export CLAUDE_APP_DIR="$R/app" CLAUDE_SWITCH_HOME="$R/home" HOME="$R/userhome"
+IA=aaaa1111-1111-4111-8111-111111111111; IB=bbbb2222-2222-4222-8222-222222222222
+mkdir -p "$R/app/claude-code-sessions/$IA/o1" "$R/app/claude-code-sessions/$IB/o2" "$R/home" "$HOME"
+echo "{\"lastKnownAccountUuid\":\"$IA\"}" > "$R/app/config.json"
+{ echo "2026-11-01 10:00:00 switch to $IB"
+  echo "2026-11-01 10:00:01 saved login of ${IA:0:8} (switch)"
+  echo "2026-11-01 10:00:02 switched to $IB"
+} > "$R/home/switch.log"
+out="$(E report)"; rc=$?
+check "report runs" '[ "$rc" = 0 ] && echo "$out" | grep -q "debug report"'
+check "report has no account ID" '! echo "$out" | grep -qE "[0-9a-f]{8}-[0-9a-f]{4}|aaaa1111|bbbb2222"'
+check "same account, same placeholder" 'echo "$out" | grep -q "switch to account 2" && echo "$out" | grep -q "switched to account 2" && echo "$out" | grep -q "saved login of account 1 "'
+echo "{\"oauthAccount\":{\"accountUuid\":\"$IB\",\"emailAddress\":\"sam@example.com\"}}" > "$HOME/.claude.json"
+E label "${IA:0:8}" "alex@example.com" >/dev/null
+{ echo "2026-11-01 10:00:03 note sam@example.com and Other.Person@mail.example.org"
+  echo "2026-11-01 10:00:04 backup -> $HOME/Backups/claude-sessions/2026-11-01"
+  echo "2026-11-01 10:00:05 backup -> /Users/demo.user/Backups/claude-sessions/2026-11-01"
+} >> "$R/home/switch.log"
+out="$(E report)"
+check "report has no email and no ID (the pass check)" '[ "$(echo "$out" | grep -cE "[0-9a-f]{8}-[0-9a-f]{4}|@")" = 0 ]'
+check "known email gets its account placeholder" 'echo "$out" | grep -q "note account 2 and account 3"'
+check "labels are not in the report" '! echo "$out" | grep -qi alex'
+check "home folder shown as ~" 'echo "$out" | grep -q "backup -> ~/Backups" && ! echo "$out" | grep -q "$R"'
+check "another user folder shown as ~" '! echo "$out" | grep -q "demo.user"'
+check "report has versions, layout, settings" 'echo "$out" | grep -q "Claude version:" && echo "$out" | grep -q "Layout check:" && echo "$out" | grep -q "syncOnSwitch"'
+for i in $(seq 1 300); do echo "2026-11-02 10:00:00 line $i"; done >> "$R/home/switch.log"
+check "only the last 200 log lines" '[ "$(E report | grep -c "  2026-")" = 200 ] && E report | grep -q "line 300" && ! E report | grep -q "line 100$"'
+
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]
