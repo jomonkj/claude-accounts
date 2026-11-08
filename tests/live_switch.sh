@@ -6,7 +6,18 @@
 #
 # Pass: every verify is ok, Claude ends on A, and no session file is lost.
 set -u
-if [ -n "${CLAUDECODE:-}" ]; then
+# Refuse only when a parent process is Claude.app. Do not trust CLAUDECODE:
+# a Terminal.app window that Claude opened inherits it.
+inside_claude() {
+  local pid=$$ cmd
+  while [ "${pid:-0}" -gt 1 ]; do
+    cmd="$(ps -o comm= -p "$pid" 2>/dev/null)" || return 1
+    case "$cmd" in */Claude.app/*) return 0 ;; esac
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+  return 1
+}
+if [ -z "${LIVE_TEST_FORCE:-}" ] && inside_claude; then
   echo "Run this in Terminal.app, not from Claude: a command that runs inside Claude stops Claude from quitting."
   exit 2
 fi
