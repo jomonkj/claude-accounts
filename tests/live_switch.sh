@@ -27,7 +27,7 @@ SESS="$HOME/Library/Application Support/Claude/claude-code-sessions"
 count() { find "$SESS" -name 'local_*.json' | wc -l | tr -d ' '; }
 names() { find "$SESS" -name 'local_*.json' | sort; }
 pass=0; fail=0
-check() { if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }
+check() { if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; [ -n "${3:-}" ] && echo "$3" | sed 's/^/       /'; fi; }
 
 echo "This quits and reopens Claude $((ROUNDS * 2)) times. Ctrl-C now to stop."; sleep 5
 before_n="$(count)"; before="$(names)"
@@ -38,9 +38,9 @@ for r in $(seq 1 "$ROUNDS"); do
   for target in "$B" "$A"; do
     t0=$(date +%s)
     out="$("$ENGINE" switch "$target" 2>&1)"
-    check "round $r: switch to $target" 'echo "$out" | grep -q "\"ok\": true"'
+    check "round $r: switch to $target" 'echo "$out" | grep -q "\"ok\": true"' "$out"
     v="$("$ENGINE" verify "$target" 2>&1)"
-    check "round $r: verify $target ($(( $(date +%s) - t0 )) s)" 'echo "$v" | grep -q "\"ok\": true"'
+    check "round $r: verify $target ($(( $(date +%s) - t0 )) s)" 'echo "$v" | grep -q "\"ok\": true"' "$v"
   done
 done
 
