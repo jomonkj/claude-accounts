@@ -47,11 +47,11 @@ This runs all tests, builds for this Mac, and installs the build in the same way
 ```bash
 claude-accounts                 # table of accounts
 claude-switch status            # JSON
-claude-switch switch 6bd8db16   # switch (full or 8-character account ID)
-claude-switch mine 6bd8db16                         # mark as yours
+claude-switch switch aaaa1111   # switch (full or 8-character account ID)
+claude-switch mine aaaa1111                         # mark as yours
 claude-switch sync --dry-run                        # preview
 claude-switch backups; claude-switch restore 2026-11-08
-claude-switch label 6bd8db16 "me@example.com"
+claude-switch label aaaa1111 "me@example.com"
 ```
 
 Run `claude-switch help` to see all commands.
