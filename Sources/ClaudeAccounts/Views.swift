@@ -1,5 +1,13 @@
 import SwiftUI
 import AppKit
+import ClaudeAccountsCore
+
+extension Account {
+    var color: Color {
+        let palette: [Color] = [.blue, .purple, .pink, .orange, .teal, .indigo, .green, .mint]
+        return palette[colorIndex % palette.count]
+    }
+}
 
 struct Avatar: View {
     let account: Account
@@ -203,7 +211,7 @@ struct MenuView: View {
                     if let paused = store.status?.paused, !paused.isEmpty {
                         SectionTitle(text: "Stopped on usage limit")
                         VStack(spacing: 1) { ForEach(paused) { PausedRow(session: $0) } }.padding(.horizontal, 6)
-                        if store.accounts.contains(where: { !$0.current && $0.savedLogin }) {
+                        if store.status?.canSwitchElsewhere == true {
                             Text("Switch to another account to continue now, then open the session and type \"continue\".")
                                 .font(.system(size: 10)).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 2)
                         }

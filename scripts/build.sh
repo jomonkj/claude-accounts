@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Build "Claude Accounts.app" into ./build. Usage: scripts/build.sh [version]
+# ARCHS="arm64 x86_64" (default) builds a universal binary; ARCHS=arm64 builds a fast local one.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:-$(git -C "$ROOT" describe --tags --always 2>/dev/null | sed 's/^v//' || echo dev)}"
 APP="$ROOT/build/Claude Accounts.app"
 
 rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/build"
-swiftc -O -parse-as-library -target "$(uname -m)-apple-macos14" \
-  -o "$APP/Contents/MacOS/ClaudeAccounts" "$ROOT"/app/Sources/*.swift
+ARCHS="${ARCHS:-arm64 x86_64}"
+bins=()
+for a in $ARCHS; do
+  swift build -c release --arch "$a" --product ClaudeAccounts --package-path "$ROOT" >&2
+  bins+=("$(swift build -c release --arch "$a" --package-path "$ROOT" --show-bin-path)/ClaudeAccounts")
+done
+lipo -create "${bins[@]}" -output "$APP/Contents/MacOS/ClaudeAccounts"
+echo "Architectures: $(lipo -archs "$APP/Contents/MacOS/ClaudeAccounts")"
 cp "$ROOT/engine/claude-switch" "$APP/Contents/Resources/claude-switch"
 
 swift "$ROOT/scripts/make-icon.swift" "$ROOT/build/AppIcon.iconset"

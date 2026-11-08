@@ -6,7 +6,8 @@ DEST="$HOME/Applications/Claude Accounts.app"
 RES="$DEST/Contents/Resources/claude-switch"
 
 "$ROOT/tests/engine_test.sh" >/dev/null || { echo "Engine tests fail. Run tests/engine_test.sh."; exit 1; }
-"$ROOT/scripts/build.sh" "$@"
+swift run --package-path "$ROOT" CoreTests >/dev/null || { echo "Core tests fail. Run: swift run CoreTests"; exit 1; }
+ARCHS="${ARCHS:-$(uname -m)}" "$ROOT/scripts/build.sh" "$@"
 
 pkill -x ClaudeAccounts 2>/dev/null || true
 mkdir -p "$HOME/Applications" "$HOME/.local/bin" "$HOME/Library/LaunchAgents"

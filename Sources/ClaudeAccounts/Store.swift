@@ -1,7 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// Talks to the engine (engine/claude-switch, bundled in the app) and holds the UI state.
+import ClaudeAccountsCore
+
+/// UI state of the menu bar app. All file work happens in the engine.
 @MainActor
 final class Store: ObservableObject {
     @Published var status: Status?
@@ -10,14 +12,12 @@ final class Store: ObservableObject {
     @Published var launchAtLogin = LoginItem.isEnabled
     @Published var showHidden = false
 
+    let engine: EngineClient
     private var timer: Timer?
 
-    nonisolated static var engine: String {
-        Bundle.main.path(forResource: "claude-switch", ofType: nil)
-            ?? (NSHomeDirectory() + "/.local/bin/claude-switch")
-    }
-
-    init() {
+    init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
+        self.engine = engine
+        guard startTimer else { return }
         Task { await tick() }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { await self?.tick() }
@@ -26,31 +26,16 @@ final class Store: ObservableObject {
 
     // MARK: engine calls
 
-    nonisolated func run(_ args: [String]) async -> (ok: Bool, out: String) {
-        await Task.detached {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-            p.arguments = ["-I", Store.engine] + args
-            p.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": NSHomeDirectory()]
-            let out = Pipe(), err = Pipe()
-            p.standardOutput = out; p.standardError = err
-            do { try p.run() } catch { return (false, error.localizedDescription) }
-            let o = out.fileHandleForReading.readDataToEndOfFile()
-            let e = err.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-            let os = String(decoding: o, as: UTF8.self), es = String(decoding: e, as: UTF8.self)
-            if p.terminationStatus == 0 { return (true, os) }
-            let msg = es.isEmpty ? os : es
-            return (false, msg.replacingOccurrences(of: "ERROR: ", with: "").trimmingCharacters(in: .whitespacesAndNewlines))
-        }.value
-    }
+    func run(_ args: [String]) async -> EngineResult { await engine.run(args) }
 
     func refresh() async {
-        let r = await run(["status"])
-        if r.ok, let s = try? JSONDecoder().decode(Status.self, from: Data(r.out.utf8)) {
+        do {
+            let s = try await engine.status()
             if s != status { status = s }
-        } else if !r.ok {
-            banner = .error(r.out)
+        } catch let e as EngineError {
+            banner = .error(e.message)
+        } catch {
+            banner = .error("Cannot read the engine output: \(error.localizedDescription)")
         }
     }
 
@@ -65,29 +50,19 @@ final class Store: ObservableObject {
         let r = await run(args)
         busy = nil
         await refresh()
-        guard r.ok else { banner = .error(r.out); return nil }
-        return (try? JSONSerialization.jsonObject(with: Data(r.out.utf8))) as? [String: Any] ?? [:]
+        guard r.ok else { banner = .error(r.output); return nil }
+        return r.json
     }
 
-    // MARK: derived state
+    // MARK: derived state (see ClaudeAccountsCore/Logic.swift)
 
     var accounts: [Account] { status?.accounts ?? [] }
-    var visibleAccounts: [Account] { accounts.filter { showHidden || !$0.hidden || $0.current } }
-    var hiddenCount: Int { accounts.filter { $0.hidden && !$0.current }.count }
-    var current: Account? { accounts.first(where: { $0.current }) }
-
-    func account(_ id: String) -> Account? { accounts.first(where: { $0.id == id }) }
-
-    var menuBarTitle: String {
-        guard status?.settings.showNameInMenuBar == true, let c = current else { return "" }
-        return c.shortTitle
-    }
-
-    var wrongAccountHint: String? {
-        guard let cur = current, let top = accounts.max(by: { $0.sessions < $1.sessions }),
-              top.id != cur.id, cur.sessions < 10, top.sessions > 50 else { return nil }
-        return "This account has only \(cur.sessions) sessions. Your \(top.sessions) sessions are in \(top.title)."
-    }
+    var visibleAccounts: [Account] { status?.visibleAccounts(showHidden: showHidden) ?? [] }
+    var hiddenCount: Int { status?.hiddenCount ?? 0 }
+    var current: Account? { status?.currentAccount }
+    func account(_ id: String) -> Account? { status?.account(id) }
+    var menuBarTitle: String { status?.menuBarTitle ?? "" }
+    var wrongAccountHint: String? { status?.wrongAccountHint }
 
     // MARK: actions
 
@@ -102,11 +77,11 @@ final class Store: ObservableObject {
             let v = await run(["verify", a.id])
             busy = nil
             await refresh()
-            let obj = (try? JSONSerialization.jsonObject(with: Data(v.out.utf8))) as? [String: Any]
-            if obj?["ok"] as? Bool == true {
+            let obj = v.json
+            if obj["ok"] as? Bool == true {
                 banner = .success("Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : ""))
             } else {
-                banner = .error(obj?["message"] as? String ?? v.out)
+                banner = .error(obj["message"] as? String ?? v.output)
             }
         }
     }
@@ -125,7 +100,7 @@ final class Store: ObservableObject {
     func shareNow() {
         Task {
             let dry = await run(["share", "--dry-run"])
-            let n = ((try? JSONSerialization.jsonObject(with: Data(dry.out.utf8))) as? [String: Any])?["count"] as? Int ?? 0
+            let n = dry.json["count"] as? Int ?? 0
             guard n > 0 else { banner = .info("This account already has every session."); return }
             guard Dialog.confirm("Share \(n) sessions into this account?",
                 "A backup is made first. Claude quits, the new or newer sessions of your other accounts are copied into this account, and Claude opens again. Other accounts keep their own sessions.",
