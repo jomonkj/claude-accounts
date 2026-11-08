@@ -37,22 +37,42 @@ check "A token loaded" '[ "$(cfg oauth:tokenCacheV2)" = tok-AAAAAAAA-1 ]'
 check "A local storage loaded" '[ "$(cat "$A/Local Storage/data")" = ls-AAAAAAAA-1 ]'
 check "B login saved" '[ -f "$CLAUDE_SWITCH_HOME/profiles/BBBBBBBB-2/meta.json" ]'
 
-echo "share on, switch to B"
-E set shareSessions on >/dev/null
+echo "sync on, switch to B"
+check "sync without mine accounts fails" '! E sync --dry-run >/dev/null && grep -q "mine" "$T/err"'
+E mine AAAAAAAA >/dev/null; E mine BBBBBBBB >/dev/null
+E set syncOnSwitch on >/dev/null; E set syncConfirmed true >/dev/null
 E switch BBBBBBBB-2 >/dev/null
 check "B cookie loaded" '[ "$(cookie)" = cookieB ]'
 check "A session shared into B" '[ -f "$A/claude-code-sessions/BBBBBBBB-2/org2/local_a1.json" ]'
 
-echo "newer session wins on share"
+echo "newer session wins on sync"
 sleep 1.1; echo '{"sessionId":"local_a1","title":"new"}' > "$A/claude-code-sessions/AAAAAAAA-1/org1/local_a1.json"
-check "dry run counts 1" '[ "$(E share --dry-run)" = "{\"count\": 1}" ]'
-E share >/dev/null
+count() { E sync --dry-run | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['changes'])"; }
+check "dry run counts 1" '[ "$(count)" = 1 ]'
+E sync >/dev/null
 check "newer copy landed" 'grep -q new "$A/claude-code-sessions/BBBBBBBB-2/org2/local_a1.json"'
-check "share made a backup" '[ -n "$(ls "$CLAUDE_SWITCH_BACKUPS")" ]'
-check "dry run now 0" '[ "$(E share --dry-run)" = "{\"count\": 0}" ]'
+check "sync made a backup" '[ -n "$(ls "$CLAUDE_SWITCH_BACKUPS")" ]'
+check "dry run now 0" '[ "$(count)" = 0 ]'
+check "B session synced back into A" '[ -f "$A/claude-code-sessions/AAAAAAAA-1/org1/local_b1.json" ]'
+
+echo "not-mine account is never touched"
+mkdir -p "$A/claude-code-sessions/CCCCCCCC-3/org3"; echo '{"x":1}' > "$A/claude-code-sessions/CCCCCCCC-3/org3/local_c1.json"
+E sync >/dev/null
+check "not-mine account got nothing" '[ "$(ls "$A/claude-code-sessions/CCCCCCCC-3/org3")" = local_c1.json ]'
+check "not-mine session not copied out" '[ ! -e "$A/claude-code-sessions/AAAAAAAA-1/org1/local_c1.json" ]'
+
+echo "backups and restore"
+echo '{"sessionId":"local_new"}' > "$A/claude-code-sessions/AAAAAAAA-1/org1/local_new.json"
+b="$(E backups | /usr/bin/python3 -c "import json,sys;print([x['name'] for x in json.load(sys.stdin)['backups'] if not x['name'].startswith('pre')][0])")"
+r="$(E restore "$b")"
+check "restore removes files made after the backup" '[ ! -e "$A/claude-code-sessions/AAAAAAAA-1/org1/local_new.json" ]'
+undo="$(echo "$r" | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['undo'])")"
+E restore "$undo" >/dev/null
+check "restore of the undo backup brings them back" '[ -f "$A/claude-code-sessions/AAAAAAAA-1/org1/local_new.json" ]'
+check "unknown backup name fails" '! E restore ../../etc >/dev/null'
 
 echo "errors"
-check "switch to unknown fails" '! E switch CCCC >/dev/null && grep -q Unknown "$T/err"'
+check "switch to unknown fails" '! E switch DDDD >/dev/null && grep -q Unknown "$T/err"'
 E forget AAAAAAAA >/dev/null
 check "forget removes login" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/AAAAAAAA-1" ]'
 check "switch without login fails" '! E switch AAAAAAAA >/dev/null && grep -q "No saved login" "$T/err"'
@@ -64,6 +84,10 @@ st="$(E status)"
 check "label in status" 'echo "$st" | grep -q me@example.com'
 check "hidden in status" 'echo "$st" | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"].startswith(\"AAAA\") and a[\"hidden\"]] else 1)"'
 check "bad setting fails" '! E set nope 1 >/dev/null'
+
+mkdir -p "$HOME/.claude-b"; echo '{"oauthAccount":{"accountUuid":"AAAAAAAA-1","emailAddress":"b@example.com"}}' > "$HOME/.claude-b/.claude.json"
+E label AAAAAAAA "" >/dev/null
+check "email from a second CLI config folder" 'E status | grep -q b@example.com'
 
 echo "tick auto-saves a running login"
 touch "$A/.running"; E tick >/dev/null

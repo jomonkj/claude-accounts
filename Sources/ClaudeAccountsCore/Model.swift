@@ -11,6 +11,7 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public let savedMode: String
     public let current: Bool
     public let hidden: Bool
+    public let owned: Bool
 
     public var title: String { name.isEmpty ? "Account \(id.prefix(8))" : name }
 
@@ -54,12 +55,29 @@ public struct PausedSession: Identifiable, Decodable, Equatable, Sendable {
 }
 
 public struct EngineSettings: Decodable, Equatable, Sendable {
-    public var shareSessions: Bool
+    public var syncOnSwitch: Bool
+    public var syncConfirmed: Bool
     public var autoSaveLogins: Bool
     public var dailyBackup: Bool
     public var backupKeep: Int
     public var showNameInMenuBar: Bool
     public var hidden: [String]
+}
+
+/// Output of `claude-switch sync --dry-run` and `sync`.
+public struct SyncResult: Decodable, Equatable, Sendable {
+    public let changes: Int
+    public let accounts: [String: Int]
+    public let skipped: [String]
+    public let dryRun: Bool
+}
+
+/// One entry of `claude-switch backups`.
+public struct BackupInfo: Decodable, Equatable, Sendable {
+    public let name: String
+    public let sessions: Int
+    public let modified: Double
+    public var isUndo: Bool { name.hasPrefix("pre-restore-") }
 }
 
 /// Output of `claude-switch status`.

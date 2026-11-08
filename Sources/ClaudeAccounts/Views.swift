@@ -53,7 +53,16 @@ struct AccountRow: View {
             HStack(spacing: 10) {
                 Avatar(account: account)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                    HStack(spacing: 5) {
+                        Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                        if account.owned {
+                            Text("MINE").font(.system(size: 8.5, weight: .bold))
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.18)))
+                                .foregroundStyle(Color.accentColor)
+                                .help("Marked as mine: sync includes this account")
+                        }
+                    }
                     Text("\(account.sessions) sessions · \(account.lastUsedText)")
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     Text(account.loginText)
@@ -65,6 +74,7 @@ struct AccountRow: View {
         }
         .contextMenu {
             Button("Rename…") { store.rename(account) }
+            Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
             if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
             if !account.current {
                 Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
@@ -148,8 +158,8 @@ struct SettingsSection: View {
     var body: some View {
         DisclosureGroup(isExpanded: $open) {
             VStack(alignment: .leading, spacing: 8) {
-                toggle("Share sessions on every switch", "Copy new or newer sessions into the account you switch to.",
-                       \.shareSessions, "shareSessions")
+                toggle("Sync sessions on every switch", "Two-way sync between the accounts you marked as mine.",
+                       \.syncOnSwitch, "syncOnSwitch")
                 toggle("Save logins automatically", "Every 5 minutes, save the login Claude uses now.",
                        \.autoSaveLogins, "autoSaveLogins")
                 toggle("Daily backup", "Copy all session lists to ~/Backups/claude-sessions once a day.",
@@ -263,8 +273,12 @@ struct MenuView: View {
     var actions: some View {
         HStack(spacing: 8) {
             Button { store.addAccount() } label: { Label("Add account", systemImage: "person.badge.plus") }
-            Button { store.shareNow() } label: { Label("Share now", systemImage: "arrow.triangle.merge") }
-            Button { store.backup() } label: { Label("Back up", systemImage: "externaldrive") }
+            Button { store.syncNow() } label: { Label("Sync now", systemImage: "arrow.triangle.2.circlepath") }
+            Menu {
+                Button("Back up now") { store.backup() }
+                Button("Restore a backup…") { store.restoreBackup() }
+            } label: { Label("Backups", systemImage: "externaldrive") }
+            .menuStyle(.borderlessButton).fixedSize()
         }
         .controlSize(.small).disabled(store.busy != nil)
         .padding(.horizontal, 12).padding(.vertical, 10)

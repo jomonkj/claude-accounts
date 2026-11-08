@@ -20,6 +20,7 @@ jobs:
         run: |
           tests/engine_test.sh
           tests/crash_test.sh
+          tests/sync_property_test.py 500
           swift run CoreTests
       - name: Build
         run: scripts/build.sh "${GITHUB_REF_NAME#v}"
