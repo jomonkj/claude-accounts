@@ -78,6 +78,7 @@ struct AccountRow: View {
             if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
             if !account.current {
                 Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
+                Button("Remove account…") { store.remove(account) }
             }
             Divider()
             Button("Copy account ID") {

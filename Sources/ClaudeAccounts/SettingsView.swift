@@ -115,6 +115,7 @@ struct AccountsTab: View {
                     Menu {
                         Button("Rename…") { store.rename(a) }
                         if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
+                        Button("Remove account…") { store.remove(a) }.disabled(a.current)
                         Button("Copy account ID") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
                         }
@@ -181,8 +182,8 @@ struct BackupsTab: View {
             .formStyle(.grouped).frame(height: 130)
             List(store.backups, id: \.name, selection: $selection) { b in
                 HStack {
-                    Image(systemName: b.isUndo ? "arrow.uturn.backward.circle" : "calendar")
-                    Text(b.isUndo ? "Before restore \(b.name.dropFirst("pre-restore-".count))" : b.name)
+                    Image(systemName: b.isUndo ? "arrow.uturn.backward.circle" : b.isRemoved ? "person.badge.minus" : "calendar")
+                    Text(b.title)
                     Spacer()
                     Text("\(b.sessions) sessions").monospacedDigit().foregroundStyle(.secondary)
                 }
@@ -191,7 +192,7 @@ struct BackupsTab: View {
             HStack {
                 Button("Back up now") { Task { store.backup(); await store.loadBackups() } }
                 Button("Restore selected…") {
-                    if let name = selection { store.restore(name) }
+                    if let b = store.backups.first(where: { $0.name == selection }) { store.restore(b) }
                 }.disabled(selection == nil)
                 Spacer()
                 Button("Show in Finder") {

@@ -60,6 +60,18 @@ func main() async {
     check("recover message: rolled back", Status.recoverMessage(["recovered": true, "action": "rolled back", "step": "saved"])?.contains("previous login is back") == true)
     check("recover message: finished", Status.recoverMessage(["recovered": true, "action": "finished", "step": "loaded"])?.contains("now finished") == true)
     check("recover message: nothing", Status.recoverMessage(["recovered": false]) == nil)
+    check("recover message: removal finished", Status.recoverMessage(["recovered": true, "op": "remove", "action": "finished", "step": "moved"]) == "A removal of an account stopped in the middle. It is now finished. Its sessions are in the backups.")
+    check("recover message: removal rolled back", Status.recoverMessage(["recovered": true, "op": "remove", "action": "rolled back", "step": "started"]) == "A removal of an account stopped before it changed anything. The account is unchanged.")
+
+    print("Remove account")
+    let other = s.account(B)!
+    check("other account can be removed", s.canRemove(other))
+    check("current account cannot be removed", !s.canRemove(s.currentAccount!))
+    let confirm = s.removeConfirmation(other)
+    check("confirm title names the account", confirm.title == "Remove jomon@example.com (Team)?")
+    for word in ["saved login", "name", "settings", "sessions", "backups", "sign in"] {
+        check("confirm text says what happens: \(word)", confirm.text.contains(word))
+    }
 
     check("owned accounts", s.ownedAccounts.map(\.id) == [A, B])
     let preview = try! JSONDecoder().decode(SyncResult.self, from: Data(
@@ -69,6 +81,11 @@ func main() async {
     let backups = try! JSONDecoder().decode([BackupInfo].self, from: Data(
         #"[{"name": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "sessions": 9, "modified": 2}]"#.utf8))
     check("undo backup is marked", backups.map(\.isUndo) == [false, true])
+    let removedBackup = try! JSONDecoder().decode(BackupInfo.self, from: Data(
+        #"{"name": "removed-20261108-123456-bbbb2222", "sessions": 3, "modified": 3}"#.utf8))
+    check("removed-account backup is marked", removedBackup.isRemoved && !removedBackup.isUndo && !backups[0].isRemoved)
+    check("backup titles", backups.map(\.title) == ["2026-11-08", "Before restore 20261108-1200"])
+    check("removed-account backup title", removedBackup.title == "Removed account bbbb2222 (2026-11-08 12:34)")
 
     check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
     check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)

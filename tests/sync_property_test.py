@@ -12,6 +12,7 @@ engine CLI, and checks the rules that must always hold:
   4. deleted stays deleted: a session deleted in any "mine" account is not added to a
      "mine" account that did not have it
   5. idempotent: a second sync reports 0 changes and changes no file
+  6-9. random remove, sync and sign-in steps afterwards (see random_steps)
 
 Usage: tests/sync_property_test.py [cases] [seed]
 """
@@ -132,9 +133,82 @@ def one_case(rng, case):
         again = run(env, "sync")
         if again["changes"] != 0 or snapshot(sess) != after:
             errors.append(f"second sync changed {again['changes']} files")
+        if not errors:
+            errors += random_steps(rng, env, sess, accounts)
         return errors
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def random_steps(rng, env, sess, accounts):
+    """Random remove, sync and sign-in steps after the first sync. Rules:
+
+      6. remove moves only the removed account's files, all of them, into the backups
+      7. a removed account is not mine, and sync never brings its folder back
+      8. no step except remove makes any file disappear
+      9. signing in to a removed account again brings it back as a new, not-mine account
+    """
+    errors, removed, back, current, new = [], set(), set(), "", 0
+    cfg = os.path.join(env["CLAUDE_APP_DIR"], "config.json")
+    steps = rng.randint(2, 4)
+    for i in range(steps + 1):
+        # One status per step checks the state left by the step before (rules 7 and 9).
+        st = {a["id"]: a for a in run(env, "status")["accounts"]}
+        still_mine = sorted(a for a in removed if a in st and st[a]["owned"])
+        if still_mine:
+            errors.append(f"removed accounts still mine: {still_mine}")
+        for a in back:
+            if a not in st or st[a]["owned"] or st[a]["savedLogin"]:
+                errors.append(f"signed-in removed {a[:8]} is not back as a new account")
+        back.clear()
+        if errors or i == steps:
+            break
+        before = snapshot(sess)
+        kind = rng.choice(["remove", "remove", "sync", "sign-in"])
+        acc = rng.choice(accounts)
+        if kind == "remove":
+            if acc == current or acc not in st:  # an account with no folder is unknown
+                continue
+            had = os.path.isdir(os.path.join(sess, acc))
+            out = run(env, "remove", acc)
+            removed.add(acc)
+            after = snapshot(sess)
+            mine = {k: v for k, v in before.items() if k.split(os.sep)[0] == acc}
+            gone = {k: v for k, v in before.items() if k not in after}
+            if gone != mine:
+                errors.append(f"remove {acc[:8]} took other files: {sorted(set(gone) - set(mine))[:3]}")
+            if {k for k in after if k not in before}:
+                errors.append(f"remove {acc[:8]} added files")
+            if had:
+                saved = snapshot(os.path.join(env["CLAUDE_SWITCH_BACKUPS"], out["backup"]))
+                if {k: v[0] for k, v in saved.items()} != {k: v[0] for k, v in mine.items()}:
+                    errors.append(f"backup of removed {acc[:8]} is not complete")
+        elif kind == "sync":
+            if not [a for a in st.values() if a["owned"]]:
+                continue
+            run(env, "sync")
+            after = snapshot(sess)
+            lost = [k for k in before if k not in after]
+            if lost:
+                errors.append(f"sync lost {lost[:3]}")
+            for a in removed:
+                if os.path.exists(os.path.join(sess, a)):
+                    errors.append(f"sync brought back removed {a[:8]}")
+        else:  # Claude signs in to acc and writes one new session
+            current = acc
+            with open(cfg, "w") as f:
+                json.dump({"lastKnownAccountUuid": acc}, f)
+            org = os.path.join(sess, acc, "org-new")
+            os.makedirs(org, exist_ok=True)
+            new += 1
+            with open(os.path.join(org, f"local_new{new}.json"), "w") as f:
+                f.write(json.dumps({"id": new}))
+            if [k for k in before if k not in snapshot(sess)]:
+                errors.append("sign-in lost files")
+            if acc in removed:
+                removed.discard(acc)
+                back.add(acc)
+    return errors
 
 
 def main():

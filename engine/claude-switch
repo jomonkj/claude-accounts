@@ -20,6 +20,8 @@ Commands (all print JSON unless noted):
   backup                      copy all session lists to ~/Backups/claude-sessions
   label [<account>] <name>    name an account (no account = current one)
   forget <account>            delete the saved login of an account
+  remove <account>            remove an account: its login, name and settings; its sessions
+                              move into the backups (restore them from there)
   hide|unhide <account>       hide an account from the list
   set <key> <value>           change a setting (true/false or a number)
   open-session <session-id>   open a session in Claude
@@ -510,7 +512,7 @@ def list_backups():
     out = []
     for d in sorted(os.listdir(BACKUPS), reverse=True):
         p = os.path.join(BACKUPS, d)
-        if os.path.isdir(p) and (re.fullmatch(r"\d{4}-\d\d-\d\d", d) or d.startswith("pre-restore-")):
+        if os.path.isdir(p) and (re.fullmatch(r"\d{4}-\d\d-\d\d", d) or d.startswith(("pre-restore-", "removed-"))):
             n = sum(1 for _ in glob.glob(os.path.join(p, "*", "*", "local_*.json")))
             out.append({"name": d, "sessions": n, "modified": os.path.getmtime(p)})
     return out
@@ -520,6 +522,8 @@ def restore(name):
     require_no_pending()
     if name not in {b["name"] for b in list_backups()}:
         raise Fail(f"No backup named {name}.")
+    if name.startswith("removed-"):
+        return restore_removed(name)
     with lock():
         running = claude_running()
         quit_claude()
@@ -533,6 +537,18 @@ def restore(name):
             open_claude()
     log(f"restored backup {name} (undo: {undo})")
     return {"ok": True, "restored": name, "undo": undo}
+
+
+def restore_removed(name):
+    """Put the session folder of a removed account back. Other accounts are not touched.
+    The account comes back as "not mine" and without a saved login."""
+    src = os.path.join(BACKUPS, name)
+    with lock():
+        for acc in os.listdir(src):
+            if os.path.isdir(os.path.join(src, acc)):
+                subprocess.run(["rsync", "-a", os.path.join(src, acc) + "/", os.path.join(SESS, acc) + "/"], check=True)
+    log(f"restored removed account from backup {name}")
+    return {"ok": True, "restored": name, "undo": ""}
 
 
 def backup(keep):
@@ -676,6 +692,92 @@ def add(force=False):
     return {"ok": True, **({"warning": warn} if warn else {})}
 
 
+# Steps of a removal, in journal order. Before the session folder is in the backups,
+# recover rolls back (nothing of the account changed); after, it finishes the removal.
+REMOVE_STEPS = ("started", "backed-up", "moved", "login-deleted", "settings-cleaned")
+
+
+def move_dir(src, dest):
+    """Move a folder. Atomic on one volume; else copy to dest.tmp, rename, then delete src."""
+    if not (TEST and os.environ.get("CLAUDE_SWITCH_TEST_COPY_MOVE")):  # test seam: force the copy
+        try:
+            os.rename(src, dest)
+            return
+        except OSError:
+            pass
+    tmp = dest + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.copytree(src, tmp, symlinks=True)
+    crash_point("copied")
+    os.rename(tmp, dest)
+    crash_point("renamed")
+    shutil.rmtree(src)
+
+
+def drop_from_settings(acc):
+    """Remove an account from every account list and map in the settings (labels, owned,
+    hidden, and any order list)."""
+    s = settings()
+    for k, v in list(s.items()):
+        if isinstance(v, list) and acc in v:
+            s[k] = [x for x in v if x != acc]
+        elif isinstance(v, dict) and k in LIST_KEYS + ("order",):
+            v.pop(acc, None)
+    save_settings(s)
+
+
+def finish_remove(j):
+    """Idempotent rest of a removal, once the session folder is in the backups."""
+    acc, dest = j["target"], j["dest"]
+    src = os.path.join(SESS, acc)
+    if os.path.isdir(src):  # the copy is complete (dest exists), the old folder is not deleted yet
+        shutil.rmtree(src)
+    checkpoint("moved")
+    shutil.rmtree(os.path.join(PROFILES, acc), ignore_errors=True)
+    checkpoint("login-deleted")
+    drop_from_settings(acc)
+    checkpoint("settings-cleaned")
+
+
+def remove(acc):
+    acc = resolve(acc)
+    require_no_pending()
+    if acc == current_account():
+        raise Fail("This is the current account of Claude. Switch to another account first, then remove it.")
+    with lock():
+        log(f"remove account {acc}")
+        name = f"removed-{datetime.datetime.now():%Y%m%d-%H%M%S}-{acc[:8]}"
+        dest = os.path.join(BACKUPS, name)
+        j = {"target": acc, "dest": dest, "name": name}
+        checkpoint("started", op="remove", **j)
+        if os.path.isdir(SESS):
+            backup(settings()["backupKeep"])
+        checkpoint("backed-up")
+        src = os.path.join(SESS, acc)
+        if os.path.isdir(src):
+            os.makedirs(dest, exist_ok=True)
+            move_dir(src, os.path.join(dest, acc))
+        finish_remove({**j, "dest": dest})
+        end_journal()
+    log(f"removed account {acc} (sessions in backup {name})")
+    return {"ok": True, "account": acc, "backup": name}
+
+
+def recover_remove(j):
+    """A removal stopped in the middle: finish it if the session folder is safe in the
+    backups, else undo the partial copy so the account is untouched."""
+    acc, dest = j.get("target") or "", j.get("dest") or ""
+    moved = os.path.isdir(os.path.join(dest, acc)) if acc and dest else False
+    if acc and (moved or j.get("step") in REMOVE_STEPS[2:]):
+        finish_remove(j)
+        return "finished"
+    if dest:
+        shutil.rmtree(os.path.join(dest, acc) + ".tmp", ignore_errors=True)
+        with contextlib.suppress(OSError):
+            os.rmdir(dest)
+    return "rolled back"
+
+
 def recover():
     j = pending()
     if not j:
@@ -684,14 +786,17 @@ def recover():
         return {"ok": True, "recovered": False, "running": True}  # the switch is still going
     with lock():
         step = j.get("step")
-        if step in ("loaded", "synced"):
+        if j.get("op") == "remove":
+            action = recover_remove(j)
+        elif step in ("loaded", "synced"):
             action = "finished"            # the target login is complete
         elif step == "saved" and os.path.isdir(LAST_STATE):
             load_login(LAST_STATE)         # the target login may be half loaded
             action = "rolled back"
         else:
             action = "nothing to undo"     # no file was changed yet
-        open_claude()
+        if j.get("op") != "remove":    # a removal does not quit Claude
+            open_claude()
         end_journal()
     log(f"recover: {action} ({j.get('op')} to {j.get('target')}, stopped after {step})")
     return {"ok": True, "recovered": True, "action": action, "step": step,
@@ -829,6 +934,8 @@ def main(argv):
         acc = resolve(args[0] if args else "")
         shutil.rmtree(os.path.join(PROFILES, acc), ignore_errors=True)
         log(f"forgot login of {acc}"); out = {"ok": True}
+    elif cmd == "remove":
+        out = remove(args[0] if args else "")
     elif cmd in ("hide", "unhide"):
         acc = resolve(args[0] if args else "")
         h = set(s["hidden"]); (h.add if cmd == "hide" else h.discard)(acc)

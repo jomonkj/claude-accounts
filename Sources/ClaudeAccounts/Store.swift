@@ -168,15 +168,11 @@ final class Store: ObservableObject {
                   let list = try? JSONDecoder().decode([BackupInfo].self, from: data), !list.isEmpty else {
                 banner = .info("No backups yet."); return
             }
-            let titles = list.map { b in
-                (b.isUndo ? "Before restore " + b.name.dropFirst("pre-restore-".count) : b.name) + "  (\(b.sessions) sessions)"
-            }
+            let titles = list.map { b in b.title + "  (\(b.sessions) sessions)" }
             guard let i = Dialog.choose("Restore a backup",
-                "The session lists of all accounts go back to the backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+                "The session lists of all accounts go back to the backup. The current state is backed up first, so you can undo this. Claude quits and opens again.\n\nA \"Removed account\" backup brings back only the sessions of that account.",
                 titles, ok: "Restore") else { return }
-            if let out = await perform("Restoring…", ["restore", list[i].name]) {
-                banner = .success("Restored \(list[i].name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
-            }
+            await restoreDone(list[i], await perform("Restoring…", ["restore", list[i].name]))
         }
     }
 
@@ -197,6 +193,20 @@ final class Store: ObservableObject {
         guard Dialog.confirm("Forget the saved login of \(a.title)?",
             "Its sessions stay. To switch to this account again, you must sign in once more.", ok: "Forget") else { return }
         Task { await perform("Saving…", ["forget", a.id]) }
+    }
+
+    func remove(_ a: Account) {
+        guard let s = status, s.canRemove(a) else {
+            banner = .info("You cannot remove the current account. Switch to another account first."); return
+        }
+        let c = s.removeConfirmation(a)
+        guard Dialog.confirm(c.title, c.text, ok: "Remove") else { return }
+        Task {
+            if let r = await perform("Removing \(a.title)…", ["remove", a.id]) {
+                banner = .success("Removed \(a.title). Its sessions are in the backup \(r["backup"] as? String ?? "").")
+                await loadBackups()
+            }
+        }
     }
 
     func setHidden(_ a: Account, _ hide: Bool) {
@@ -270,16 +280,21 @@ final class Store: ObservableObject {
         backups = list
     }
 
-    func restore(_ name: String) {
-        guard Dialog.confirm("Restore the backup \(name)?",
-            "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+    func restore(_ b: BackupInfo) {
+        guard Dialog.confirm("Restore the backup \(b.title)?", b.isRemoved
+            ? "The sessions of the removed account come back. Other accounts do not change. The account comes back as not mine and without a saved login."
+            : "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
             ok: "Restore") else { return }
         Task {
-            if let out = await perform("Restoring…", ["restore", name]) {
-                banner = .success("Restored \(name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
-            }
+            await restoreDone(b, await perform("Restoring…", ["restore", b.name]))
             await loadBackups()
         }
+    }
+
+    private func restoreDone(_ b: BackupInfo, _ out: [String: Any]?) async {
+        guard let out else { return }
+        banner = .success(b.isRemoved ? "The sessions of the removed account are back."
+            : "Restored \(b.title). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
     }
 
     func openLog() {
