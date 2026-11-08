@@ -88,9 +88,10 @@ struct AccountsTab: View {
     @EnvironmentObject var store: Store
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Table(store.accounts) {
+            Table(of: Account.self) {
                 TableColumn("Account") { a in
                     HStack(spacing: 8) {
+                        if store.isPinned(a) { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary) }
                         Avatar(account: a, size: 22)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(a.title).lineLimit(1).truncationMode(.middle)
@@ -114,6 +115,7 @@ struct AccountsTab: View {
                 TableColumn("") { a in
                     Menu {
                         Button("Rename…") { store.rename(a) }
+                        Button(store.isPinned(a) ? "Unpin" : "Pin to top") { store.setPinned(a, !store.isPinned(a)) }
                         if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
                         Button("Copy account ID") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
@@ -121,11 +123,14 @@ struct AccountsTab: View {
                     } label: { Image(systemName: "ellipsis.circle") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.width(30)
+            } rows: {
+                ForEach(store.accounts) { a in TableRow(a).draggable(a.id) }
+                    .dropDestination(for: String.self) { index, ids in store.reorder(ids, to: index) }
             }
             HStack {
                 Button { store.addAccount() } label: { Label("Add account…", systemImage: "person.badge.plus") }
                 Spacer()
-                Text("Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
+                Text("Drag to sort. Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding()

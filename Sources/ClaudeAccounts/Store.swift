@@ -87,8 +87,10 @@ final class Store: ObservableObject {
 
     // MARK: derived state (see ClaudeAccountsCore/Logic.swift)
 
-    var accounts: [Account] { status?.accounts ?? [] }
-    var visibleAccounts: [Account] { status?.visibleAccounts(showHidden: showHidden) ?? [] }
+    /// All accounts in panel order (Settings → Accounts).
+    var accounts: [Account] { status?.panelOrder(showHidden: true) ?? [] }
+    var visibleAccounts: [Account] { status?.panelOrder(showHidden: showHidden) ?? [] }
+    func isPinned(_ a: Account) -> Bool { status?.isPinned(a.id) ?? false }
     var hiddenCount: Int { status?.hiddenCount ?? 0 }
     var current: Account? { status?.currentAccount }
     func account(_ id: String) -> Account? { status?.account(id) }
@@ -201,6 +203,16 @@ final class Store: ObservableObject {
 
     func setHidden(_ a: Account, _ hide: Bool) {
         Task { await perform("Saving…", [hide ? "hide" : "unhide", a.id]) }
+    }
+
+    func setPinned(_ a: Account, _ pin: Bool) {
+        Task { await perform("Saving…", [pin ? "pin" : "unpin", a.id]) }
+    }
+
+    /// Saves the order after a drag in Settings → Accounts.
+    func reorder(_ ids: [String], to index: Int) {
+        guard let order = status?.orderAfterMove(ids, to: index), order != accounts.map(\.id) else { return }
+        Task { await perform("Saving…", ["order"] + order) }
     }
 
     func set(_ key: String, _ value: Bool) {

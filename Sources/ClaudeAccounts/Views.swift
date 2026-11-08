@@ -55,6 +55,10 @@ struct AccountRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                        if store.isPinned(account) {
+                            Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                                .help("Pinned to the top")
+                        }
                         if account.owned {
                             Text("MINE").font(.system(size: 8.5, weight: .bold))
                                 .padding(.horizontal, 4).padding(.vertical, 1)
@@ -75,6 +79,7 @@ struct AccountRow: View {
         .contextMenu {
             Button("Rename…") { store.rename(account) }
             Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
+            Button(store.isPinned(account) ? "Unpin" : "Pin to top") { store.setPinned(account, !store.isPinned(account)) }
             if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
             if !account.current {
                 Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
