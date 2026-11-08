@@ -282,6 +282,16 @@ final class Store: ObservableObject {
         }
     }
 
+    /// Copies the engine's debug report (no emails, no account IDs) to the clipboard.
+    /// Returns a short message for the user.
+    func copyDebugReport() async -> String {
+        let r = await run(["report"])
+        guard r.ok, !r.output.isEmpty else { return "Cannot make the report: \(r.output)" }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(r.output, forType: .string)
+        return "Report copied. It has no emails and no account IDs."
+    }
+
     func openLog() {
         let log = NSHomeDirectory() + "/Library/Application Support/Claude Account Switcher/switch.log"
         NSWorkspace.shared.open(URL(fileURLWithPath: log))

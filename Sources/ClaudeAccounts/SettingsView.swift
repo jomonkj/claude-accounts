@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import ClaudeAccountsCore
 
-/// The Settings window: General, Accounts, Sync, Backups, Advanced.
+/// The Settings window: General, Accounts, Sync, Backups, Advanced, About.
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @State var tab: String = "general"
@@ -14,6 +14,7 @@ struct SettingsView: View {
             SyncTab().tabItem { Label("Sync", systemImage: "arrow.triangle.2.circlepath") }.tag("sync")
             BackupsTab().tabItem { Label("Backups", systemImage: "externaldrive") }.tag("backups")
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
+            AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
         .frame(width: 620, height: 440)
         .environmentObject(store)
@@ -234,6 +235,26 @@ struct AdvancedTab: View {
                 }
                 LabeledContent("Engine", value: store.engine.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                     .font(.caption)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct AboutTab: View {
+    @EnvironmentObject var store: Store
+    @State var reportMessage = ""
+
+    var body: some View {
+        Form {
+            LabeledContent("Claude Accounts", value: "Version \(Store.version)")
+            Section("Report a problem") {
+                Text("The debug report has the app and Claude versions, the layout check, the settings and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("Copy debug report") { Task { reportMessage = await store.copyDebugReport() } }
+                    Text(reportMessage).font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
