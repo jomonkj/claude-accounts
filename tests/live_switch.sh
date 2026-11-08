@@ -2,7 +2,7 @@
 # LIVE test on the real Claude app. It quits and reopens Claude several times,
 # so finish your work in Claude first, and run it from Terminal (not from Claude).
 #
-#   tests/live_switch.sh <account A> <account B> [rounds]     e.g. 59f2e10c 6bd8db16 3
+#   tests/live_switch.sh <account A> <account B> [rounds]     e.g. aaaa1111 bbbb2222 3
 #
 # Pass: every verify is ok, Claude ends on A, and no session file is lost.
 set -u
