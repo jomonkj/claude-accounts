@@ -76,6 +76,7 @@ struct AccountRow: View {
             Button("Rename…") { store.rename(account) }
             Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
             if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
+            if account.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(account) } }
             if !account.current {
                 Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
             }
@@ -93,10 +94,10 @@ struct AccountRow: View {
         } else if account.savedLogin {
             Button("Switch") { store.switchTo(account) }
                 .buttonStyle(.borderedProminent).controlSize(.small).disabled(store.busy != nil)
-        } else {
-            Text("Sign in once")
-                .font(.system(size: 11)).foregroundStyle(.tertiary)
-                .help("Click Add account and sign in with this account one time. After that, one click switches to it.")
+        } else if account.needsSignInToSave {
+            Button("Sign in to save") { store.signInToSave(account) }
+                .controlSize(.small).disabled(store.busy != nil)
+                .help("Sign in to this account in Claude one time. The app saves the login. After that, one click switches to it.")
         }
     }
 }

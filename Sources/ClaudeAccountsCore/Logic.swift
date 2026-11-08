@@ -49,6 +49,17 @@ public extension Status {
         }
     }
 
+    /// Banner for the result of `claude-switch save-login <account>`, or nil while Claude is not signed in yet.
+    static func signInResult(_ json: [String: Any], title: String) -> Banner? {
+        if json["saved"] as? Bool == true {
+            return .success("Login of \(title) is saved. You can now switch to it with one click.")
+        }
+        if json["match"] as? Bool == false {
+            return .warning(json["message"] as? String ?? "Claude is signed in to a different account. The login was not saved under \(title).")
+        }
+        return nil
+    }
+
     var ownedAccounts: [Account] { accounts.filter(\.owned) }
 
     /// Lines for the sync preview, for example "jomon@example.com: 16 sessions". Accounts with 0 changes are left out.

@@ -115,6 +115,7 @@ struct AccountsTab: View {
                     Menu {
                         Button("Rename…") { store.rename(a) }
                         if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
+                        if a.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(a) } }
                         Button("Copy account ID") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
                         }
