@@ -151,52 +151,6 @@ struct BannerView: View {
     }
 }
 
-struct SettingsSection: View {
-    @EnvironmentObject var store: Store
-    @State private var open = false
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $open) {
-            VStack(alignment: .leading, spacing: 8) {
-                toggle("Sync sessions on every switch", "Two-way sync between the accounts you marked as mine.",
-                       \.syncOnSwitch, "syncOnSwitch")
-                toggle("Save logins automatically", "Every 5 minutes, save the login Claude uses now.",
-                       \.autoSaveLogins, "autoSaveLogins")
-                toggle("Daily backup", "Copy all session lists to ~/Backups/claude-sessions once a day.",
-                       \.dailyBackup, "dailyBackup")
-                toggle("Show account name in menu bar", nil, \.showNameInMenuBar, "showNameInMenuBar")
-                HStack {
-                    Text("Keep backups").font(.system(size: 12))
-                    Spacer()
-                    Stepper("\(store.status?.settings.backupKeep ?? 7) days", value: Binding(
-                        get: { store.status?.settings.backupKeep ?? 7 },
-                        set: { store.setNumber("backupKeep", max(1, min(60, $0))) }), in: 1...60)
-                        .font(.system(size: 12)).controlSize(.small)
-                }
-                Toggle("Open at login", isOn: Binding(
-                    get: { store.launchAtLogin },
-                    set: { LoginItem.set($0); store.launchAtLogin = LoginItem.isEnabled }))
-                    .toggleStyle(.switch).controlSize(.mini).font(.system(size: 12))
-            }
-            .padding(.top, 6)
-        } label: {
-            Label("Settings", systemImage: "gearshape").font(.system(size: 12, weight: .medium))
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-    }
-
-    func toggle(_ title: String, _ help: String?, _ kp: KeyPath<EngineSettings, Bool>, _ key: String) -> some View {
-        Toggle(isOn: Binding(get: { store.status?.settings[keyPath: kp] ?? false },
-                             set: { store.set(key, $0) })) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12))
-                if let help { Text(help).font(.system(size: 10)).foregroundStyle(.secondary) }
-            }
-        }
-        .toggleStyle(.switch).controlSize(.mini)
-    }
-}
-
 struct MenuView: View {
     @EnvironmentObject var store: Store
 
@@ -234,8 +188,6 @@ struct MenuView: View {
             .fixedSize(horizontal: false, vertical: true)
             Divider()
             actions
-            Divider()
-            SettingsSection()
             Divider()
             footer
         }
@@ -289,7 +241,7 @@ struct MenuView: View {
             Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
             Spacer()
-            Button("Log") { store.openLog() }
+            Button("Settings…") { store.showSettings() }.keyboardShortcut(",")
             Button("Open Claude") { NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Claude.app")) }
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
         }

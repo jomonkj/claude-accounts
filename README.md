@@ -10,6 +10,8 @@ A macOS menu bar app that switches the **Claude desktop app** between accounts w
 - **Stopped on usage limit.** Lists sessions that stopped on the 5-hour limit, with the reset time. **Open** opens the session in Claude. A notification appears one time for each stopped session, with **Switch to …** buttons for your other "mine" accounts and **Open session**. The app never switches by itself; a button click still shows the normal confirmation. If macOS does not allow notifications for the app, the menu bar icon shows a red count instead.
 - **Wrong-account warning.** Shows a warning when the active account has few sessions and another account has many.
 - **Backups and restore.** A daily copy of all session lists goes to `~/Backups/claude-sessions`, and the app keeps the last N days. Sync always makes a backup first. **Backups → Restore a backup…** restores any backup, and before that it saves the current state, so a restore can be undone.
+- **Settings window** (⌘, in the panel), with these tabs: General, Accounts (one table with sessions, login, Mine and Show for each account), Sync, Backups (list and restore), and Advanced (Claude version, layout check, recover, files).
+- **First-run guide.** Three pages: what the app does, mark your accounts and add missing logins, then sync and open-at-login. Open it again from Settings → General.
 - **Upkeep.** Rename an account, hide it, or forget its saved login. You can show the account name in the menu bar, and the app can open at login.
 
 ## Install
@@ -102,6 +104,8 @@ swift run CoreTests                                 # app logic tests (no Xcode 
 scripts/build.sh                                    # universal build into ./build
 ARCHS=arm64 scripts/build.sh                        # faster, one architecture
 build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render /tmp/panel.png [dark]
+build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render-settings accounts /tmp/settings.png
+build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render-welcome 1 /tmp/welcome.png
 ```
 
 The `--render` option draws the panel to a PNG file, so you can check the layout without the menu bar.
