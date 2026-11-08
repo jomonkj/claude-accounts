@@ -78,11 +78,28 @@ public extension Status {
     static func recoverMessage(_ json: [String: Any]) -> String? {
         guard json["recovered"] as? Bool == true else { return nil }
         let step = json["step"] as? String ?? "?"
+        if json["op"] as? String == "remove" {
+            return json["action"] as? String == "finished"
+                ? "A removal of an account stopped in the middle. It is now finished. Its sessions are in the backups."
+                : "A removal of an account stopped before it changed anything. The account is unchanged."
+        }
         switch json["action"] as? String {
         case "rolled back": return "A switch stopped in the middle (after \(step)). Your previous login is back."
         case "finished": return "A switch stopped in the middle (after \(step)). It is now finished."
         default: return "A switch stopped before it changed anything. Claude is unchanged."
         }
+    }
+
+    /// Claude must always keep its signed-in account, so the current account cannot be removed.
+    func canRemove(_ a: Account) -> Bool { !a.current }
+
+    /// Title and text of the confirm dialog for `claude-switch remove`.
+    func removeConfirmation(_ a: Account) -> (title: String, text: String) {
+        ("Remove \(a.title)?",
+         "The app deletes the saved login, the name and the settings of this account. "
+         + "Sync no longer uses it. Its sessions move into the backups. "
+         + "To get them back, restore \"Removed account \(a.id.prefix(8))\" in Backups.\n\n"
+         + "The account comes back only when you sign in to it again in Claude.")
     }
 
     /// Banner for the result of `claude-switch save-login <account>`, or nil while Claude is not signed in yet.

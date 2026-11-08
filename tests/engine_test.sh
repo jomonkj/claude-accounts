@@ -179,6 +179,48 @@ wait $holder
 check "after the lock is free, it is a pending recovery" 'E status | grep -q "\"pendingRecovery\": true"'
 E recover >/dev/null
 
+echo "remove account"
+S="$A/claude-code-sessions"; D=DDDDDDDD-4
+mkdir -p "$S/$D/org4"; for i in 1 2; do echo "{\"sessionId\":\"local_d$i\"}" > "$S/$D/org4/local_d$i.json"; done
+mkdir -p "$CLAUDE_SWITCH_HOME/profiles/$D"; echo '{"savedAt":1,"mode":"switch"}' > "$CLAUDE_SWITCH_HOME/profiles/$D/meta.json"
+E label "$D" "sam@example.com" >/dev/null; E mine DDDDDDDD >/dev/null; E hide DDDDDDDD >/dev/null
+cur="$(E status | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['current'])")"
+E order "$D" "$cur" >/dev/null; E pin DDDDDDDD >/dev/null; E pin "$cur" >/dev/null
+setting() { /usr/bin/python3 -c "import json;print(' '.join(json.load(open('$CLAUDE_SWITCH_HOME/settings.json')).get('$1') or []))"; }
+others() { (cd "$S" && find . -type f ! -path "./$D/*" -print0 | sort -z | xargs -0 shasum); }
+o_before="$(others)"
+check "remove the current account is refused" '! E remove "$cur" >/dev/null && grep -q "current account" "$T/err"'
+check "...and its folder stays" '[ -d "$S/$cur" ]'
+check "remove an unknown account fails" '! E remove EEEE >/dev/null && grep -q Unknown "$T/err"'
+/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(2)" & holder=$!
+sleep 0.5
+check "remove during a switch is refused" '! E remove DDDDDDDD >/dev/null && grep -q "Another switch" "$T/err"'
+wait $holder
+check "...and changes nothing" '[ -f "$S/$D/org4/local_d1.json" ] && [ -d "$CLAUDE_SWITCH_HOME/profiles/$D" ]'
+echo '{"op":"switch","step":"started"}' > "$CLAUDE_SWITCH_HOME/journal.json"
+check "remove with a pending recovery is refused" '! E remove DDDDDDDD >/dev/null && grep -q "recover" "$T/err"'
+rm "$CLAUDE_SWITCH_HOME/journal.json"
+out="$(E remove DDDDDDDD)"
+check "remove succeeds" 'echo "$out" | grep -q "\"ok\": true"'
+bk="$(echo "$out" | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['backup'])")"
+check "account is gone from status" '! E status | grep -q "$D"'
+check "session folder is gone" '[ ! -e "$S/$D" ]'
+check "session folder moved into the backups" '[ -f "$CLAUDE_SWITCH_BACKUPS/$bk/$D/org4/local_d2.json" ]'
+check "saved login deleted" '[ ! -e "$CLAUDE_SWITCH_HOME/profiles/$D" ]'
+check "label, owned and hidden removed" '! grep -q "$D" "$CLAUDE_SWITCH_HOME/settings.json"'
+check "removed from order and pinned, others kept" '[ "$(setting order)" = "$cur" ] && [ "$(setting pinned)" = "$cur" ]'
+check "other accounts unchanged" '[ "$(others)" = "$o_before" ]'
+check "no journal left" '[ ! -e "$CLAUDE_SWITCH_HOME/journal.json" ]'
+check "removal is in the log" 'grep -q "removed account $D" "$CLAUDE_SWITCH_HOME/switch.log"'
+E sync >/dev/null
+check "sync does not bring the folder back" '[ ! -e "$S/$D" ]'
+check "backups lists the removed account" 'E backups | grep -q "\"name\": \"$bk\""'
+o_before="$(others)"
+E restore "$bk" >/dev/null
+check "restore brings the sessions back" '[ -f "$S/$D/org4/local_d1.json" ] && [ -f "$S/$D/org4/local_d2.json" ]'
+check "...and keeps the other accounts" '[ "$(others)" = "$o_before" ]'
+check "...and the account is not mine" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"$D\" and not a[\"owned\"] and not a[\"savedLogin\"]] else 1)"'
+
 echo "sign in to save (save-login)"
 mkdir -p "$A/claude-code-sessions/DDDDDDDD-4/org4"
 login_as BBBBBBBB-2 cookieB; E add >/dev/null

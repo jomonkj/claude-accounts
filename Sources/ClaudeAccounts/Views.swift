@@ -90,6 +90,7 @@ struct AccountRow: View {
             if account.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(account) } }
             if !account.current {
                 Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
+                Button("Remove account…") { store.remove(account) }
             }
             Divider()
             Button("Copy account ID") {

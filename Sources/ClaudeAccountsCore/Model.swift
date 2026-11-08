@@ -95,6 +95,17 @@ public struct BackupInfo: Decodable, Equatable, Sendable {
     public let sessions: Int
     public let modified: Double
     public var isUndo: Bool { name.hasPrefix("pre-restore-") }
+    /// The session folder of a removed account (`removed-YYYYMMDD-HHMMSS-<account>`).
+    public var isRemoved: Bool { name.hasPrefix("removed-") }
+
+    /// Name to show in the Backups list.
+    public var title: String {
+        if isUndo { return "Before restore " + name.dropFirst("pre-restore-".count) }
+        let p = name.split(separator: "-").map(String.init)
+        guard isRemoved, p.count == 4, p[1].count == 8, p[2].count == 6 else { return name }
+        let (d, t) = (Array(p[1]), Array(p[2]))
+        return "Removed account \(p[3]) (\(String(d[0..<4]))-\(String(d[4..<6]))-\(String(d[6..<8])) \(String(t[0..<2])):\(String(t[2..<4])))"
+    }
 }
 
 /// Output of `claude-switch status`.
