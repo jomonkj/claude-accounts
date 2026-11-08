@@ -21,6 +21,8 @@ Commands (all print JSON unless noted):
   label [<account>] <name>    name an account (no account = current one)
   forget <account>            delete the saved login of an account
   hide|unhide <account>       hide an account from the list
+  order <account>...          set the account order in the panel (new accounts go last)
+  pin|unpin <account>         pin an account to the top of the panel
   set <key> <value>           change a setting (true/false or a number)
   open-session <session-id>   open a session in Claude
   update-check <version>      is a newer GitHub Release out? (uses gh)
@@ -57,8 +59,8 @@ LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
 CONFIG_KEYS = ["oauth:tokenCacheV2", "lastKnownAccountUuid"]
 DEFAULTS = {"syncOnSwitch": False, "autoSaveLogins": True, "dailyBackup": True,
             "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {},
-            "owned": [], "syncConfirmed": False}
-LIST_KEYS = ("hidden", "labels", "owned")
+            "owned": [], "syncConfirmed": False, "order": [], "pinned": []}
+LIST_KEYS = ("hidden", "labels", "owned", "order", "pinned")
 
 os.umask(0o077)
 os.makedirs(PROFILES, exist_ok=True)
@@ -105,6 +107,8 @@ def settings():
     s["owned"] = list(s.get("owned") or [])
     s["labels"] = dict(s.get("labels") or {})
     s["hidden"] = list(s.get("hidden") or [])
+    s["order"] = list(s.get("order") or [])
+    s["pinned"] = list(s.get("pinned") or [])
     if os.path.exists(OLD_LABELS) and not s.get("importedV1Labels"):  # names from version 1
         for line in open(OLD_LABELS):
             p = line.rstrip("\n").split(" ", 1)
@@ -889,6 +893,16 @@ def main(argv):
         acc = resolve(args[0] if args else "")
         h = set(s["hidden"]); (h.add if cmd == "hide" else h.discard)(acc)
         s["hidden"] = sorted(h); save_settings(s); out = {"ok": True}
+    elif cmd == "order":
+        order = [resolve(a) for a in args]
+        if len(set(order)) != len(order):
+            raise Fail("Each account can be in the order only once.")
+        s["order"] = order; save_settings(s); out = {"ok": True}
+    elif cmd in ("pin", "unpin"):
+        acc = resolve(args[0] if args else "")
+        p = [a for a in s["pinned"] if a != acc]
+        s["pinned"] = p + [acc] if cmd == "pin" else p
+        save_settings(s); out = {"ok": True}
     elif cmd == "set":
         if len(args) != 2 or args[0] not in DEFAULTS or args[0] in LIST_KEYS:
             raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in LIST_KEYS) + "> <value>")

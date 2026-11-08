@@ -1,6 +1,6 @@
 {"current": "aaaa1111-0000-0000-0000-000000000000", "signedIn": true, "claudeRunning": true,
  "claudeVersion": "4.23118.0", "versionTested": true, "layoutProblems": [], "pendingRecovery": false,
- "settings": {"syncOnSwitch": false, "syncConfirmed": false, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7, "showNameInMenuBar": true, "hidden": ["cccc3333-0000-0000-0000-000000000000"]},
+ "settings": {"syncOnSwitch": false, "syncConfirmed": false, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7, "showNameInMenuBar": true, "hidden": ["cccc3333-0000-0000-0000-000000000000"], "order": [], "pinned": []},
  "accounts": [
   {"id": "aaaa1111-0000-0000-0000-000000000000", "name": "", "sessions": 3, "lastUsed": 1794124745.0, "savedLogin": true, "savedAt": 1794124745.0, "savedMode": "auto", "current": true, "hidden": false, "owned": true},
   {"id": "bbbb2222-0000-0000-0000-000000000000", "name": "jomon@example.com (Team)", "sessions": 728, "lastUsed": 1794120000.0, "savedLogin": true, "savedAt": 1794120000.0, "savedMode": "switch", "current": false, "hidden": false, "owned": true},

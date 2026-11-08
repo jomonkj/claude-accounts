@@ -85,6 +85,24 @@ check "label in status" 'echo "$st" | grep -q me@example.com'
 check "hidden in status" 'echo "$st" | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"].startswith(\"AAAA\") and a[\"hidden\"]] else 1)"'
 check "bad setting fails" '! E set nope 1 >/dev/null'
 
+echo "account order and pin"
+settings_of() { E status | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['settings']['$1'])"; }
+check "order is empty by default" '[ "$(settings_of order)" = "[]" ]'
+E order BBBBBBBB AAAAAAAA >/dev/null
+check "order saves full ids from short ids" '[ "$(settings_of order)" = "['"'"'BBBBBBBB-2'"'"', '"'"'AAAAAAAA-1'"'"']" ]'
+check "order with an unknown account fails" '! E order DDDD >/dev/null && grep -q Unknown "$T/err"'
+check "...and keeps the old order" '[ "$(settings_of order)" = "['"'"'BBBBBBBB-2'"'"', '"'"'AAAAAAAA-1'"'"']" ]'
+check "order with a repeated account fails" '! E order AAAAAAAA AAAAAAAA-1 >/dev/null'
+check "set cannot change order" '! E set order 1 >/dev/null'
+check "pinned is empty by default" '[ "$(settings_of pinned)" = "[]" ]'
+E pin AAAAAAAA >/dev/null
+check "pin adds the account" '[ "$(settings_of pinned)" = "['"'"'AAAAAAAA-1'"'"']" ]'
+E pin AAAAAAAA >/dev/null
+check "pin twice keeps one entry" '[ "$(settings_of pinned)" = "['"'"'AAAAAAAA-1'"'"']" ]'
+E unpin AAAAAAAA >/dev/null
+check "unpin removes the account" '[ "$(settings_of pinned)" = "[]" ]'
+check "pin of an unknown account fails" '! E pin DDDD >/dev/null'
+
 mkdir -p "$HOME/.claude-b"; echo '{"oauthAccount":{"accountUuid":"AAAAAAAA-1","emailAddress":"b@example.com"}}' > "$HOME/.claude-b/.claude.json"
 E label AAAAAAAA "" >/dev/null
 check "email from a second CLI config folder" 'E status | grep -q b@example.com'

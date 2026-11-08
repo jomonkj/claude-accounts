@@ -64,6 +64,10 @@ public struct EngineSettings: Decodable, Equatable, Sendable {
     public var backupKeep: Int
     public var showNameInMenuBar: Bool
     public var hidden: [String]
+    /// Account IDs in the order the user chose. Accounts not in the list go last.
+    public var order: [String]
+    /// Account IDs pinned to the top of the panel.
+    public var pinned: [String]
 }
 
 /// Output of `claude-switch sync --dry-run` and `sync`.
