@@ -36,6 +36,15 @@ public extension Status {
         return rest
     }
 
+    /// The account the next-account shortcut switches to: the first account after the current one
+    /// in panel order that is mine and has a saved login. Wraps from the last account to the first.
+    /// Nil when no other account fits.
+    func nextAccount(showHidden: Bool) -> Account? {
+        let list = panelOrder(showHidden: showHidden)
+        let start = list.firstIndex(where: { $0.current }).map { $0 + 1 } ?? 0
+        return (list[start...] + list[..<start]).first { !$0.current && $0.owned && $0.savedLogin }
+    }
+
     func isPinned(_ id: String) -> Bool { settings.pinned.contains(id) }
 
     var hiddenCount: Int { accounts.filter { $0.hidden && !$0.current }.count }

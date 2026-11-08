@@ -20,6 +20,8 @@ final class Store: ObservableObject {
     let engine: EngineClient
     let notifier = Notifier()
     private var timer: Timer?
+    private var hotKeys: HotKeys?
+    private var nextRunning = false
 
     init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
         self.engine = engine
@@ -29,6 +31,16 @@ final class Store: ObservableObject {
             self.switchTo(a)
         }
         notifier.start()
+        // No global keys in the debug render modes.
+        if !CommandLine.arguments.contains(where: { $0.hasPrefix("--render") }) {
+            hotKeys = HotKeys { [weak self] key in
+                switch key {
+                case .openPanel: self?.openPanel()
+                case .nextAccount: self?.switchToNext()
+                }
+            }
+            hotKeys?.apply()
+        }
         if !UserDefaults.standard.bool(forKey: "welcomeDone") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
         }
@@ -123,6 +135,43 @@ final class Store: ObservableObject {
                 notifier.say("Login expired", "\(a.title): sign in again in Claude. The app saves the new login.")
             }
         }
+    }
+
+    /// ⌃⌥⌘N: switch to the next account that is mine and has a saved login, in panel order.
+    /// Does nothing while a switch or another engine task runs.
+    func switchToNext() {
+        guard busy == nil, !nextRunning else { return }
+        nextRunning = true
+        Task {
+            defer { nextRunning = false }
+            await refresh()
+            guard busy == nil else { return }
+            guard let next = status?.nextAccount(showHidden: showHidden) else {
+                notifier.say("No other account", "Save the login of another account first. Then the shortcut can switch to it.")
+                return
+            }
+            switchTo(next)
+        }
+    }
+
+    /// ⌃⌥⌘C: open the panel, as a click on the menu bar icon does.
+    func openPanel() {
+        NSApp.activate(ignoringOtherApps: true)
+        func button(in v: NSView?) -> NSStatusBarButton? {
+            guard let v else { return nil }
+            if let b = v as? NSStatusBarButton { return b }
+            return v.subviews.lazy.compactMap { button(in: $0) }.first
+        }
+        for w in NSApp.windows where w.className.contains("StatusBar") {
+            if let b = button(in: w.contentView) { b.performClick(nil); return }
+        }
+    }
+
+    /// Turns a shortcut on or off (Settings → General).
+    func setShortcut(_ key: HotKeys.Key, _ on: Bool) {
+        UserDefaults.standard.set(on, forKey: key.setting)
+        hotKeys?.apply()
+        objectWillChange.send()
     }
 
     func addAccount() {
