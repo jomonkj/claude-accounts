@@ -41,6 +41,22 @@ struct EngineToggle: View {
     }
 }
 
+/// On/off switch for one keyboard shortcut. Works from any app.
+struct ShortcutToggle: View {
+    @EnvironmentObject var store: Store
+    let key: HotKeys.Key
+    let title: String
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { key.isOn }, set: { store.setShortcut(key, $0) })) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(title)  \(key.label)")
+                Text("Works from any app. Turn it off if another app uses this key.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 struct GeneralTab: View {
     @EnvironmentObject var store: Store
     var body: some View {
@@ -56,6 +72,10 @@ struct GeneralTab: View {
                          key: "showNameInMenuBar", value: \.showNameInMenuBar)
             EngineToggle(title: "Save logins automatically", help: "Every 5 minutes, save the login Claude uses now.",
                          key: "autoSaveLogins", value: \.autoSaveLogins)
+            Section("Keyboard shortcuts") {
+                ShortcutToggle(key: .openPanel, title: "Open the panel")
+                ShortcutToggle(key: .nextAccount, title: "Switch to the next account")
+            }
             Section("Updates") {
                 HStack {
                     if let u = store.update {

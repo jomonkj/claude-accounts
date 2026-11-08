@@ -125,6 +125,40 @@ func main() async {
     check("drag of an unknown id changes nothing", s.orderAfterMove(["dddd4444"], to: 0) == [A, B, C])
     check("isPinned", ordered(order: [], pinned: [B]).isPinned(B) && !s.isPinned(B))
 
+    print("Next account")
+    check("next account: the next one after the current one in panel order",
+          s.nextAccount(showHidden: false)?.id == B)
+    // Panel order C, B, A; A is current, C is not mine and has no saved login.
+    check("next account: skips an account that is not mine or has no saved login",
+          ordered(order: [C, B]).nextAccount(showHidden: true)?.id == B)
+    // Three accounts that are mine with a saved login: A, B, D.
+    let D = "dddd4444-0000-0000-0000-000000000000"
+    func three(current: String?, order: [String] = [A, B, D], pinned: [String] = [], hidden: [String] = []) -> Status {
+        func q(_ ids: [String]) -> String { "[" + ids.map { "\"\($0)\"" }.joined(separator: ",") + "]" }
+        let accs = [A, B, D].map { id in
+            "{\"id\": \"\(id)\", \"name\": \"\", \"sessions\": 1, \"lastUsed\": 0, \"savedLogin\": true, \"savedAt\": 0, "
+            + "\"savedMode\": \"switch\", \"current\": \(id == current), \"hidden\": \(hidden.contains(id)), \"owned\": true}"
+        }
+        let json = "{\"current\": \"\(current ?? "")\", \"signedIn\": true, \"claudeRunning\": true, \"claudeVersion\": \"1\", "
+            + "\"versionTested\": true, \"layoutProblems\": [], \"pendingRecovery\": false, \"paused\": [], "
+            + "\"settings\": {\"syncOnSwitch\": false, \"syncConfirmed\": false, \"autoSaveLogins\": true, \"dailyBackup\": true, "
+            + "\"backupKeep\": 7, \"showNameInMenuBar\": true, \"hidden\": \(q(hidden)), \"order\": \(q(order)), \"pinned\": \(q(pinned))}, "
+            + "\"accounts\": [\(accs.joined(separator: ","))]}"
+        return try! JSONDecoder().decode(Status.self, from: Data(json.utf8))
+    }
+    check("next account: from the middle", three(current: B).nextAccount(showHidden: false)?.id == D)
+    check("next account: wraps from the last to the first", three(current: D).nextAccount(showHidden: false)?.id == A)
+    check("next account: follows the saved order", three(current: A, order: [D, A, B]).nextAccount(showHidden: false)?.id == B)
+    check("next account: pinned accounts come first and the order wraps",
+          three(current: B, pinned: [D]).nextAccount(showHidden: false)?.id == D)
+    check("next account: skips a hidden account", three(current: B, hidden: [D]).nextAccount(showHidden: false)?.id == A)
+    check("next account: includes a hidden account when hidden accounts show",
+          three(current: B, hidden: [D]).nextAccount(showHidden: true)?.id == D)
+    check("next account: no current account starts at the first",
+          three(current: nil).nextAccount(showHidden: false)?.id == A)
+    check("next account: nil when no other account fits",
+          three(current: A, hidden: [B, D]).nextAccount(showHidden: false) == nil)
+
     print("Sign in to save")
     check("button only on accounts without a saved login", s.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
     let curNoLogin = try! JSONDecoder().decode(Status.self, from: Data(
