@@ -247,6 +247,27 @@ final class Store: ObservableObject {
         }
     }
 
+    // MARK: uninstall
+
+    func uninstall() {
+        guard Dialog.confirm("Uninstall Claude Accounts?",
+            """
+            This removes the app, the login item and the claude-switch and claude-accounts commands. \
+            Claude and its sessions do not change.
+
+            These stay, so you can install again without losing anything:
+            • Saved logins and settings: ~/Library/Application Support/Claude Account Switcher
+            • Backups: ~/Backups/claude-sessions
+            """, ok: "Uninstall") else { return }
+        Task {
+            busy = "Uninstalling…"; banner = nil
+            // The engine stops this app when it is done, so there is nothing to refresh after it.
+            let r = await run(["uninstall"])
+            busy = nil
+            if r.ok { NSApp.terminate(nil) } else { banner = .error(r.output) }
+        }
+    }
+
     // MARK: windows
 
     /// Opens (or brings to front) a normal window. The app is a menu bar app, so it must

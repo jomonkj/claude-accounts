@@ -27,6 +27,7 @@ Commands (all print JSON unless noted):
   open-session <session-id>   open a session in Claude
   update-check <version>      is a newer GitHub Release out? (uses gh)
   update-install <tag>        download, check and install a release, then reopen the app
+  uninstall                   remove the app, the login item and the CLI links (keeps saved logins and backups)
 
 <account> is a full account UUID or its first 8 characters.
 """
@@ -846,6 +847,63 @@ def update_install(tag):
     return {"ok": True, "tag": tag}
 
 
+AGENT_LABEL = "local.claude-accounts"
+
+
+def uninstall():
+    """Remove the app, the login item and the CLI links. Keep the data folder and the backups.
+
+    The paths are the ones install-release.sh writes, always under $HOME. In test mode the steps
+    that act outside $HOME (launchctl, pkill, the Finder Trash) are not run: they are listed in
+    `stubbed`, and the app goes to $HOME/.Trash.
+    """
+    import pwd
+    if TEST and os.path.realpath(HOME) == os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir):
+        raise Fail("Test mode needs a temporary HOME. Nothing was changed.")
+    app = os.path.join(HOME, "Applications", "Claude Accounts.app")
+    agent = os.path.join(HOME, "Library", "LaunchAgents", AGENT_LABEL + ".plist")
+    stop = [["/bin/launchctl", "bootout", f"gui/{os.getuid()}/{AGENT_LABEL}"], ["/usr/bin/pkill", "-x", "ClaudeAccounts"]]
+    with lock():
+        require_no_pending()
+        removed = []
+        for name in ("claude-switch", "claude-accounts"):
+            link = os.path.join(HOME, ".local", "bin", name)
+            # Only our own links: never delete a file the user put there.
+            if os.path.islink(link) and "Claude Accounts.app" in os.readlink(link):
+                os.remove(link); removed.append(link)
+        if os.path.exists(agent):
+            os.remove(agent); removed.append(agent)
+        if os.path.isdir(app):
+            trash_item(app); removed.append(app)
+        log("uninstalled: " + ", ".join(removed))
+    out = {"ok": True, "removed": removed, "data": BASE, "backups": BACKUPS}
+    if TEST:
+        out["stubbed"] = [" ".join([os.path.basename(c[0])] + c[1:]) for c in stop]
+        return out
+    # Stop the login item and the app last: the app may be our parent, so print the result first.
+    print(json.dumps(out), flush=True)
+    with contextlib.suppress(OSError):
+        os.setsid()
+    for c in stop:
+        subprocess.run(c, capture_output=True)
+    return None
+
+
+def trash_item(path):
+    if TEST:
+        trash = os.path.join(HOME, ".Trash")
+        os.makedirs(trash, exist_ok=True)
+        shutil.move(path, os.path.join(trash, os.path.basename(path)))
+        return
+    # NSFileManager puts it in the Trash with "Put Back", and needs no Finder automation permission.
+    js = ("ObjC.import('Foundation');var e=$();"
+          "if(!$.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError("
+          "$.NSURL.fileURLWithPath(" + json.dumps(path) + "),null,e))throw new Error('trash failed')")
+    r = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", js], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise Fail(f"Cannot move the app to the Trash: {r.stderr.strip()}")
+
+
 def main(argv):
     cmd, args = (argv[1] if len(argv) > 1 else "status"), argv[2:]
     if os.path.basename(argv[0]) == "claude-accounts" and len(argv) == 1:
@@ -913,6 +971,10 @@ def main(argv):
         out = update_check(args[0] if args else "0.0.0")
     elif cmd == "update-install":
         out = update_install(args[0] if args else "")
+    elif cmd == "uninstall":
+        out = uninstall()
+        if out is None:  # already printed
+            return 0
     elif cmd == "open-session":
         open_claude(f"claude://claude.ai/epitaxy/{args[0]}"); out = {"ok": True}
     else:
