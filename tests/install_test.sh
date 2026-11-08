@@ -26,13 +26,19 @@ check "CLI linked" '[ -L "$H/.local/bin/claude-accounts" ] && [ -L "$H/.local/bi
 check "login item written" 'plutil -lint "$H/Library/LaunchAgents/local.claude-accounts.plist" >/dev/null'
 check "not an app is refused" '! run --app /nonexistent'
 
+echo "quarantined app (browser download, unzipped by Finder)"
+rm -rf "$H"; mkdir -p "$T/q"; cp -R "$APP" "$T/q/"
+find "$T/q/Claude Accounts.app" -print0 | xargs -0 xattr -w com.apple.quarantine "0081;00000000;Safari;"
+run --app "$T/q/Claude Accounts.app"
+check "quarantine flag removed from every file" '! find "$H/Applications/Claude Accounts.app" -print0 | xargs -0 xattr | grep -q quarantine'
+
 echo "download"
 rm -rf "$H"
 ditto -c -k --keepParent "$APP" "$T/rel/Claude-Accounts-v9.9.9.zip"
 (cd "$T/rel" && shasum -a 256 Claude-Accounts-v9.9.9.zip > Claude-Accounts-v9.9.9.zip.sha256)
 run
 check "good download installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ]'
-check "no quarantine flag" '! xattr "$H/Applications/Claude Accounts.app" | grep -q quarantine'
+
 rm -rf "$H"; printf x >> "$T/rel/Claude-Accounts-v9.9.9.zip"
 run; code=$?
 check "damaged download stops" '[ $code != 0 ] && grep -q "Checksum does not match" "$T/out"'

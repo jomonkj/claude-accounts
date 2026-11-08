@@ -38,7 +38,11 @@ pkill -x ClaudeAccounts 2>/dev/null || true
 mkdir -p "$HOME/Applications" "$HOME/.local/bin" "$HOME/Library/LaunchAgents"
 rm -rf "$DEST"
 ditto "$APP_SRC" "$DEST"
-xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+# Not notarized: remove the quarantine flag from every file (this xattr has no -r).
+find "$DEST" -print0 | xargs -0 xattr -d com.apple.quarantine 2>/dev/null || true
+if find "$DEST" -print0 | xargs -0 xattr 2>/dev/null | grep -q com.apple.quarantine; then
+  echo "Could not remove the quarantine flag. The first time, right-click the app -> Open." >&2
+fi
 
 RES="$DEST/Contents/Resources/claude-switch"
 ln -sf "$RES" "$HOME/.local/bin/claude-switch"
