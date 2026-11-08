@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Engine tests
         run: tests/engine_test.sh
+      - name: Crash test
+        run: tests/crash_test.sh
       - name: Core tests
         run: swift run CoreTests
       - name: Universal build

@@ -54,6 +54,22 @@ Session lists are stored per account in `claude-code-sessions/<account>/<org>/lo
 
 Before every switch, the exact state goes to `.../Claude Account Switcher/last-state`, so you can restore it by hand. Every action is written to `switch.log` in the same folder.
 
+### Crash safety
+
+A switch writes its progress to `journal.json` before each step that changes files: `started → saved → loaded → synced`. If the engine stops in the middle (for example, the Mac loses power), `claude-switch recover` reads the journal:
+
+| Stopped after | Recover does |
+|---|---|
+| `started` | nothing; no file was changed |
+| `saved` (or during the load) | rolls back to `last-state` |
+| `loaded`, `synced` | finishes the switch; the target login is complete |
+
+The app runs `recover` by itself when it starts. While a journal exists, every other change is refused, and the automatic login save does not run. `tests/crash_test.sh` stops the engine after each step and checks the result (45 checks).
+
+### Version and layout guard
+
+Before a switch, the engine checks that the Claude data folder still has the layout it knows: `config.json`, a `Cookies` database with a `cookies(host_key, name)` table, the session folder, and an account ID next to the token. If any check fails, the switch stops and changes nothing; `--force` overrides this. A Claude version that is not in the tested list, but has the known layout, may switch with a warning; after the first successful `verify`, that version counts as tested.
+
 ## Limits
 
 - The app switches only the Claude desktop app. The `claude` CLI in a terminal has its own login.
@@ -66,6 +82,7 @@ Before every switch, the exact state goes to `.../Claude Account Switcher/last-s
 
 ```bash
 tests/engine_test.sh                                # engine tests in a fake app folder
+tests/crash_test.sh                                 # kill the engine at each switch step, then recover
 swift run CoreTests                                 # app logic tests (no Xcode needed)
 scripts/build.sh                                    # universal build into ./build
 ARCHS=arm64 scripts/build.sh                        # faster, one architecture

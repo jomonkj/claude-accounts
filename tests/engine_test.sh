@@ -4,7 +4,9 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENGINE="$ROOT/engine/claude-switch"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-export CLAUDE_APP_DIR="$T/app" CLAUDE_SWITCH_HOME="$T/home" CLAUDE_SWITCH_BACKUPS="$T/backups" CLAUDE_SWITCH_TEST=1 HOME="$T/userhome"
+export CLAUDE_APP_DIR="$T/app" CLAUDE_SWITCH_HOME="$T/home" CLAUDE_SWITCH_BACKUPS="$T/backups" CLAUDE_SWITCH_TEST=1 HOME="$T/userhome" CLAUDE_INFO_PLIST="$T/Info.plist"
+plist() { /usr/bin/python3 -c "import plistlib;plistlib.dump({'CFBundleShortVersionString':'$1'},open('$T/Info.plist','wb'))"; }
+plist 4.23118.0
 A="$T/app"; mkdir -p "$A/claude-code-sessions/AAAAAAAA-1/org1" "$A/claude-code-sessions/BBBBBBBB-2/org2" "$HOME"
 pass=0; fail=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  ok   $1"; else fail=$((fail+1)); echo "  FAIL $1"; fi; }
@@ -74,5 +76,26 @@ mkdir -p "$HOME/.claude/projects/p"
 echo '{"sessionId":"local_p1","cliSessionId":"cli-p1","title":"Paused one"}' > "$A/claude-code-sessions/BBBBBBBB-2/org2/local_p1.json"
 echo '{"type":"assistant","isApiErrorMessage":true,"timestamp":"2026-11-07T12:00:00Z","message":{"content":[{"type":"text","text":"You'"'"'ve hit your session limit · resets 8pm (Asia/Calcutta)"}]}}' > "$HOME/.claude/projects/p/cli-p1.jsonl"
 check "paused listed with reset time" 'E status | grep -q "8pm (Asia/Calcutta)"'
+
+echo "version and layout guard"
+E label BBBBBBBB-2 "" >/dev/null
+login_as BBBBBBBB-2 cookieB; E add >/dev/null; login_as AAAAAAAA-1 cookieA
+plist 9.9.9
+out="$(E switch BBBBBBBB-2)"
+check "untested version with known layout switches" 'echo "$out" | grep -q "\"ok\": true"'
+check "...and warns" 'echo "$out" | grep -q "not tested yet"'
+check "status says version not tested" 'E status | grep -q "\"versionTested\": false"'
+E verify BBBBBBBB-2 >/dev/null
+check "verify adds the version to tested" 'E status | grep -q "\"versionTested\": true"'
+plist 9.9.10
+echo "not a database" > "$A/Cookies"
+appsum() { find "$A" -type f -print0 | sort -z | xargs -0 shasum | shasum; }
+before="$(appsum)"
+check "unknown layout refuses the switch" '! E switch AAAAAAAA >/dev/null && grep -q "does not know" "$T/err"'
+check "...and changes no file" '[ "$(appsum)" = "$before" ]'
+check "status lists the layout problem" 'E status | grep -q "not a database"'
+check "unknown layout refuses add" '! E add >/dev/null'
+check "--force switches anyway" 'E switch AAAAAAAA --force | grep -q "Forced switch"'
+check "recover with no journal is a no-op" 'E recover | grep -q "\"recovered\": false"'
 
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]

@@ -67,6 +67,10 @@ public struct Status: Decodable, Equatable, Sendable {
     public let current: String
     public let signedIn: Bool
     public let claudeRunning: Bool
+    public let claudeVersion: String
+    public let versionTested: Bool
+    public let layoutProblems: [String]
+    public let pendingRecovery: Bool
     public let settings: EngineSettings
     public let accounts: [Account]
     public let paused: [PausedSession]
