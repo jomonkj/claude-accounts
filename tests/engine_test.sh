@@ -179,6 +179,22 @@ wait $holder
 check "after the lock is free, it is a pending recovery" 'E status | grep -q "\"pendingRecovery\": true"'
 E recover >/dev/null
 
+echo "sign in to save (save-login)"
+mkdir -p "$A/claude-code-sessions/DDDDDDDD-4/org4"
+login_as BBBBBBBB-2 cookieB; E add >/dev/null
+check "waits while Claude is signed out" 'E save-login DDDDDDDD | grep -q "\"waiting\": true"'
+login_as BBBBBBBB-2 cookieB2
+out="$(E save-login DDDDDDDD)"
+check "other account signed in: mismatch" 'echo "$out" | grep -q "\"match\": false"'
+check "...and the message names the signed-in account" 'echo "$out" | grep -q "BBBBBBBB-2"'
+check "...and no login saved for the picked account" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4" ]'
+login_as DDDDDDDD-4 cookieD
+out="$(E save-login DDDDDDDD)"
+check "picked account signed in: saved" 'echo "$out" | grep -q "\"saved\": true"'
+check "...and the login is in the profile" '[ -f "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4/meta.json" ]'
+check "status shows the saved login" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"DDDDDDDD-4\" and a[\"savedLogin\"]] else 1)"'
+check "unknown account fails" '! E save-login ZZZZ >/dev/null'
+
 echo "update check (fake gh)"
 cat > "$T/gh" <<'GH'
 #!/bin/sh

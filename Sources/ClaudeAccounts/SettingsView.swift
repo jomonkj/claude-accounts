@@ -118,6 +118,7 @@ struct AccountsTab: View {
                         Button("Rename…") { store.rename(a) }
                         Button(store.isPinned(a) ? "Unpin" : "Pin to top") { store.setPinned(a, !store.isPinned(a)) }
                         if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
+                        if a.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(a) } }
                         Button("Copy account ID") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
                         }

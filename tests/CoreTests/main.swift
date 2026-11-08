@@ -125,6 +125,20 @@ func main() async {
     check("drag of an unknown id changes nothing", s.orderAfterMove(["dddd4444"], to: 0) == [A, B, C])
     check("isPinned", ordered(order: [], pinned: [B]).isPinned(B) && !s.isPinned(B))
 
+    print("Sign in to save")
+    check("button only on accounts without a saved login", s.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
+    let curNoLogin = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"savedLogin\": true, \"savedAt\": 1794124745.0", with: "\"savedLogin\": false, \"savedAt\": 1794124745.0").utf8))
+    check("no button on the current account, even without a saved login",
+          curNoLogin.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
+    check("sign-in result: still waiting", Status.signInResult(["ok": true, "saved": false, "waiting": true], title: "Test") == nil)
+    check("sign-in result: saved", Status.signInResult(["ok": true, "saved": true, "match": true], title: "Test")
+          == .success("Login of Test is saved. You can now switch to it with one click."))
+    if case .warning(let t)? = Status.signInResult(["ok": true, "saved": false, "match": false, "message": "Claude is signed in to a different account."], title: "Test") {
+        check("sign-in result: mismatch is a warning with the engine message", t.contains("different account"))
+    } else { check("sign-in result: mismatch is a warning with the engine message", false) }
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")

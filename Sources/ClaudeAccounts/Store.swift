@@ -136,6 +136,35 @@ final class Store: ObservableObject {
         }
     }
 
+    /// "Sign in to save": the `add` flow, then wait until Claude is signed in to the picked account.
+    func signInToSave(_ a: Account) {
+        guard Dialog.confirm("Sign in to \(a.title) to save its login?",
+            "1. Claude quits. Your current login is saved first.\n2. Claude opens signed out.\n3. In Claude, sign in to \(a.title).\n4. The app sees the sign-in and saves the login. It tells you when the login is saved.\n\nRunning tasks in Claude stop. Finish them first.",
+            ok: "Continue") else { return }
+        Task {
+            guard await perform("Saving your login…", ["add"]) != nil else { return }
+            banner = .info("Now sign in to \(a.title) in Claude. The app waits for the sign-in.")
+            await waitForSignIn(a)
+        }
+    }
+
+    private func waitForSignIn(_ a: Account) async {
+        let end = Date().addingTimeInterval(15 * 60)
+        while Date() < end {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            let r = await run(["save-login", a.id])
+            guard r.ok else { banner = .error(r.output); return }
+            if let b = Status.signInResult(r.json, title: a.title) {
+                banner = b
+                await refresh()
+                if case .success(let t) = b { notifier.say("Login saved", t) }
+                else if case .warning(let t) = b { notifier.say("Different account", t) }
+                return
+            }
+        }
+        banner = .info("No sign-in to \(a.title) in 15 minutes. Click Sign in to save to try again.")
+    }
+
     func syncNow() {
         Task {
             guard let s = status else { return }

@@ -10,6 +10,7 @@ Commands (all print JSON unless noted):
   switch <account> [--force]  quit Claude, save this login, load <account>, open Claude
   verify <account>            wait until Claude runs signed in as <account>
   add [--force]               quit Claude, save this login, open Claude signed out
+  save-login <account>        save the login if Claude is signed in to <account> (sign in to save)
   recover                     finish or roll back a switch that stopped in the middle
   sync [--dry-run]            two-way sync of session lists between "mine" accounts
   share [--dry-run]           old name for sync
@@ -335,8 +336,8 @@ def has_login(app=APP):
 # ---------- saving and loading a login ----------
 
 def save_login(dest, mode):
-    """Copy the login of the desktop app into folder `dest`. mode: switch | auto."""
-    live = mode == "auto"
+    """Copy the login of the desktop app into folder `dest`. mode: switch | auto | signin."""
+    live = mode in ("auto", "signin")  # Claude may be running
     tmp = dest + ".tmp"
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
@@ -809,6 +810,25 @@ def add(force=False):
     return {"ok": True, **({"warning": warn} if warn else {})}
 
 
+def save_signed_in(target):
+    """Step 3 of "Sign in to save": save the login only if Claude is signed in to `target`."""
+    target = resolve(target)
+    cur = current_account()
+    if not cur or not has_login():
+        return {"ok": True, "saved": False, "waiting": True}
+    if cur != target:
+        log(f"sign in to save: expected {target}, Claude is on {cur}")
+        return {"ok": True, "saved": False, "match": False, "expected": target, "current": cur,
+                "message": f"Claude is signed in to a different account ({cur[:8]}), not the one you picked. "
+                           f"The login was not saved under the picked account. Sign out in Claude, then sign in to the picked account."}
+    with lock():
+        if pending():
+            raise Fail("A switch is not finished. Try again in a moment.")
+        save_login(os.path.join(PROFILES, target), "signin")
+    log(f"sign in to save: saved login of {target}")
+    return {"ok": True, "saved": True, "match": True, "account": target}
+
+
 def recover():
     j = pending()
     if not j:
@@ -992,6 +1012,8 @@ def main(argv):
         out = verify(args[0] if args else "")
     elif cmd == "add":
         out = add(force="--force" in args)
+    elif cmd == "save-login":
+        out = save_signed_in(args[0] if args else "")
     elif cmd == "recover":
         out = recover()
     elif cmd in ("sync", "share"):
