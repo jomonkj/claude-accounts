@@ -13,11 +13,17 @@ final class Store: ObservableObject {
     @Published var showHidden = false
 
     let engine: EngineClient
+    let notifier = Notifier()
     private var timer: Timer?
 
     init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
         self.engine = engine
         guard startTimer else { return }
+        notifier.onSwitch = { [weak self] id in
+            guard let self, let a = self.account(id) else { return }
+            self.switchTo(a)
+        }
+        notifier.start()
         Task { await tick() }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { await self?.tick() }
@@ -35,6 +41,7 @@ final class Store: ObservableObject {
             let s = try await engine.status()
             if s != status { status = s }
             if s.pendingRecovery && !recovering { await recover() }
+            notifier.update(s)
         } catch let e as EngineError {
             banner = .error(e.message)
         } catch {
@@ -77,6 +84,8 @@ final class Store: ObservableObject {
     var current: Account? { status?.currentAccount }
     func account(_ id: String) -> Account? { status?.account(id) }
     var menuBarTitle: String { status?.menuBarTitle ?? "" }
+    /// Badge count for the menu bar: paused sessions, shown only when notifications are not allowed.
+    var menuBarBadge: Int { notifier.allowed ? 0 : (status?.paused.count ?? 0) }
     var wrongAccountHint: String? { status?.wrongAccountHint }
 
     // MARK: actions
@@ -97,8 +106,10 @@ final class Store: ObservableObject {
             if obj["ok"] as? Bool == true {
                 let text = "Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : "")
                 banner = warning.map { .warning(text + " " + $0) } ?? .success(text)
+                notifier.say("Switched account", text)
             } else {
                 banner = .error(obj["message"] as? String ?? v.output)
+                notifier.say("Login expired", "\(a.title): sign in again in Claude. The app saves the new login.")
             }
         }
     }

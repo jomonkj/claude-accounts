@@ -70,6 +70,13 @@ func main() async {
         #"[{"name": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "sessions": 9, "modified": 2}]"#.utf8))
     check("undo backup is marked", backups.map(\.isUndo) == [false, true])
 
+    check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
+    check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)
+    check("switch targets: mine, saved, not current", s.switchTargets().map(\.id) == [B])
+    let note = s.notificationText(for: s.paused[0])
+    check("notification text", note.title == "Usage limit reached"
+          && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")
