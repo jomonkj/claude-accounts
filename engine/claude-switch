@@ -468,6 +468,60 @@ def transcript_tail(cli_id, size=65536):
     return []
 
 
+MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+RESET_RE = re.compile(r"^(?:at\s+)?(?:(?P<mon>[A-Za-z]{3})[a-z]*\s+(?P<day>\d{1,2}),?\s+|(?P<wday>[A-Za-z]{3})[a-z]*,?\s+)?"
+                      r"(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ap>[ap]m)\s*(?:\((?P<tz>[A-Za-z0-9_+\-/]+)\))?\s*$", re.I)
+
+
+def reset_timestamp(text, stopped_at):
+    """Epoch seconds of a reset text such as "8pm (Asia/Calcutta)" or "Nov 10, 5pm (America/New_York)".
+    The reset is the first such time after stopped_at (ISO time). None when the text cannot be read."""
+    m = RESET_RE.match((text or "").strip())
+    if not m:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(m["tz"]) if m["tz"] else None
+        ref = datetime.datetime.fromisoformat(stopped_at.replace("Z", "+00:00")) if stopped_at else None
+    except Exception:
+        return None
+    if ref is None or ref.tzinfo is None:
+        ref = datetime.datetime.now(datetime.timezone.utc)
+    ref = ref.astimezone(tz) if tz else ref.astimezone()
+    h, mi = int(m["h"]), int(m["m"] or 0)
+    if not (1 <= h <= 12 and mi < 60):
+        return None
+    h = h % 12 + (12 if m["ap"].lower() == "pm" else 0)
+
+    def at(day):
+        # Build the wall time in the zone, then fold it into the zone (handles DST offsets).
+        naive = datetime.datetime(day.year, day.month, day.day, h, mi)
+        return naive.replace(tzinfo=tz) if tz else naive.astimezone()
+
+    if m["mon"]:
+        if m["mon"].lower() not in MONTHS:
+            return None
+        mon, day = MONTHS.index(m["mon"].lower()) + 1, int(m["day"])
+        for year in (ref.year, ref.year + 1):
+            with contextlib.suppress(ValueError):
+                t = at(datetime.date(year, mon, day))
+                if t > ref - datetime.timedelta(days=1):
+                    return int(t.timestamp())
+        return None
+    want = None
+    if m["wday"]:
+        if m["wday"].lower() not in WEEKDAYS:
+            return None
+        want = WEEKDAYS.index(m["wday"].lower())
+    for add in range(8):
+        d = ref.date() + datetime.timedelta(days=add)
+        t = at(d)
+        if t > ref and (want is None or d.weekday() == want):
+            return int(t.timestamp())
+    return None
+
+
 def paused_sessions(days=3):
     """Sessions whose last turn ended on a usage-limit error."""
     newest = {}
@@ -497,9 +551,11 @@ def paused_sessions(days=3):
         if "limit" not in text.lower():
             continue
         reset = re.search(r"resets? ([^·\n]+)", text)
+        resets = reset.group(1).strip() if reset else ""
+        stopped = last.get("timestamp", "")
         out.append({"id": sid, "title": d.get("title") or "Untitled", "account": f.split(os.sep)[-3],
-                    "cwd": d.get("cwd", ""), "message": text.strip()[:160],
-                    "resets": reset.group(1).strip() if reset else "", "stoppedAt": last.get("timestamp", "")})
+                    "cwd": d.get("cwd", ""), "message": text.strip()[:160], "resets": resets,
+                    "resetsAt": reset_timestamp(resets, stopped), "stoppedAt": stopped})
     out.sort(key=lambda x: x["stoppedAt"], reverse=True)
     return out
 

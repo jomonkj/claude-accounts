@@ -78,6 +78,32 @@ public extension Status {
         return ("Usage limit reached", "\"\(p.title)\" stopped on \(who).\(reset)")
     }
 
+    /// Grey line under an account that hit its limit, for example "Limit resets 4:50 PM".
+    /// Nil when the account has no known reset time that is still in the future.
+    func resetLine(for accountID: String, now: Date = Date(), timeZone: TimeZone = .current) -> String? {
+        let next = paused.filter { $0.account == accountID }
+            .compactMap(\.resetsAt).filter { $0 > now.timeIntervalSince1970 }.max()
+        return next.map { "Limit resets " + Self.resetTime(Date(timeIntervalSince1970: $0), now: now, timeZone: timeZone) }
+    }
+
+    /// Second line of a paused session row: the reset time while it is in the future, then the account.
+    func pausedSubtitle(_ p: PausedSession, now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        let who = account(p.account)?.shortTitle ?? String(p.account.prefix(8))
+        guard let at = p.resetsAt, at > now.timeIntervalSince1970 else { return "Limit reached · \(who)" }
+        return "Limit resets " + Self.resetTime(Date(timeIntervalSince1970: at), now: now, timeZone: timeZone) + " · \(who)"
+    }
+
+    /// "4:50 PM" today, else "Sun 4:50 PM".
+    static func resetTime(_ t: Date, now: Date, timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = timeZone
+        f.dateFormat = cal.isDate(t, inSameDayAs: now) ? "h:mm a" : "EEE h:mm a"
+        return f.string(from: t)
+    }
+
     /// Sessions that are paused now but were not paused in `previous`.
     func newlyPaused(since previous: Status?) -> [PausedSession] {
         let old = Set(previous?.paused.map(\.id) ?? [])

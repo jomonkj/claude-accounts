@@ -77,6 +77,29 @@ func main() async {
     check("notification text", note.title == "Usage limit reached"
           && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
 
+    print("Reset time")
+    let ist = TimeZone(identifier: "Asia/Calcutta")!
+    let resetAt = Date(timeIntervalSince1970: 1794136800)  // 2026-11-08 4:50 PM in Asia/Calcutta
+    check("reset time decoded", s.paused[0].resetsAt == 1794136800)
+    check("reset line before the reset",
+          s.resetLine(for: B, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == "Limit resets 4:50 PM")
+    check("reset line names the day when it is not today",
+          s.resetLine(for: B, now: resetAt.addingTimeInterval(-86400), timeZone: ist) == "Limit resets Sun 4:50 PM")
+    check("no reset line after the reset", s.resetLine(for: B, now: resetAt.addingTimeInterval(1), timeZone: ist) == nil)
+    check("no reset line for an account without a limit",
+          s.resetLine(for: A, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == nil)
+    let unknown = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"resetsAt\": 1794136800", with: "\"resetsAt\": null").utf8))
+    check("no reset line when the reset time is not known",
+          unknown.resetLine(for: B, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == nil)
+    check("paused row: reset known", s.pausedSubtitle(s.paused[0], now: resetAt.addingTimeInterval(-3600), timeZone: ist)
+          == "Limit resets 4:50 PM · jomon")
+    check("paused row: reset passed", s.pausedSubtitle(s.paused[0], now: resetAt.addingTimeInterval(1), timeZone: ist)
+          == "Limit reached · jomon")
+    check("paused row: reset not known", unknown.pausedSubtitle(unknown.paused[0], now: resetAt, timeZone: ist)
+          == "Limit reached · jomon")
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")
