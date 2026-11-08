@@ -12,6 +12,9 @@ final class Store: ObservableObject {
     @Published var launchAtLogin = LoginItem.isEnabled
     @Published var showHidden = false
     @Published var backups: [BackupInfo] = []
+    @Published var update: UpdateInfo?
+    private var lastUpdateCheck = Date.distantPast
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
     private var windows: [String: NSWindow] = [:]
 
     let engine: EngineClient
@@ -69,6 +72,7 @@ final class Store: ObservableObject {
     func tick() async {
         _ = await run(["tick"])
         await refresh()
+        if Date().timeIntervalSince(lastUpdateCheck) > 24 * 3600 { await checkForUpdate() }
     }
 
     @discardableResult
@@ -100,7 +104,7 @@ final class Store: ObservableObject {
             "Claude quits, loads the saved login of this account, and opens again. Your current login is saved first, so you can switch back at any time.\n\nRunning tasks in Claude stop. Finish them first.",
             ok: "Switch") else { return }
         Task {
-            guard let r = await perform("Switching to \(a.title)…", ["switch", a.id]) else { return }
+            guard let r = await perform("Switching to \(a.title)… If Claude asks to confirm the quit, click Quit.", ["switch", a.id]) else { return }
             let shared = r["shared"] as? Int ?? 0
             let warning = r["warning"] as? String
             busy = "Checking the login…"
@@ -209,6 +213,26 @@ final class Store: ObservableObject {
 
     func open(_ p: PausedSession) {
         Task { await perform("Opening…", ["open-session", p.id]) }
+    }
+
+    // MARK: updates
+
+    func checkForUpdate() async {
+        lastUpdateCheck = Date()
+        let r = await run(["update-check", Self.version])
+        update = try? JSONDecoder().decode(UpdateInfo.self, from: Data(r.output.utf8))
+    }
+
+    func installUpdate() {
+        guard let tag = update?.latest else { return }
+        guard Dialog.confirm("Install Claude Accounts \(tag)?",
+            "The app downloads the release, checks its checksum, replaces itself, and opens again. Claude is not touched.",
+            ok: "Install") else { return }
+        Task {
+            if await perform("Downloading \(tag)…", ["update-install", tag]) != nil {
+                busy = "Installing \(tag)…"  // the installer stops this app and opens the new one
+            }
+        }
     }
 
     // MARK: windows

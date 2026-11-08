@@ -16,11 +16,25 @@ A macOS menu bar app that switches the **Claude desktop app** between accounts w
 
 ## Install
 
+**Teammates** (needs the GitHub CLI, signed in with access to this repo):
+
+```bash
+gh release download --repo jomonkj/claude-accounts --pattern install-release.sh --output - | bash
+```
+
+The script downloads the latest release, checks its sha256, installs the app to `~/Applications`, removes the quarantine flag, links the CLI into `~/.local/bin`, adds the login item, and opens the app.
+
+If you do not use Terminal: download `Claude-Accounts-<version>.zip` from the Releases page, unzip it, and move the app to Applications. The app is not notarized, so the first time, **right-click it → Open → Open**.
+
+**Updates:** the app checks GitHub Releases once a day through `gh`. When a new version exists, the panel shows **Update**.
+
+**From source** (needs the Xcode Command Line Tools and macOS 14 or later):
+
 ```bash
 scripts/install.sh
 ```
 
-The script runs the tests, builds the app, copies it to `~/Applications`, links the CLI into `~/.local/bin`, adds a login item, and opens the app. It needs the Xcode Command Line Tools (`swiftc`) and macOS 14 or later.
+This runs all tests, builds for this Mac, and installs the build in the same way.
 
 ## First use
 
@@ -100,6 +114,7 @@ Before a switch, the engine checks that the Claude data folder still has the lay
 tests/engine_test.sh                                # engine tests in a fake app folder
 tests/crash_test.sh                                 # kill the engine at each switch step, then recover
 tests/sync_property_test.py [cases]                 # sync rules on random stores (default 500)
+tests/install_test.sh                               # installer in a fake HOME (needs a build)
 swift run CoreTests                                 # app logic tests (no Xcode needed)
 scripts/build.sh                                    # universal build into ./build
 ARCHS=arm64 scripts/build.sh                        # faster, one architecture

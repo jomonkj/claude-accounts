@@ -122,4 +122,45 @@ check "unknown layout refuses add" '! E add >/dev/null'
 check "--force switches anyway" 'E switch AAAAAAAA --force | grep -q "Forced switch"'
 check "recover with no journal is a no-op" 'E recover | grep -q "\"recovered\": false"'
 
+echo "Claude does not quit (found in the live test)"
+before="$(E status | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['current'])")"
+check "switch fails with a clear message" '! CLAUDE_SWITCH_QUIT_FAIL=1 E switch BBBBBBBB >/dev/null && grep -q "did not quit" "$T/err"'
+check "...and leaves no journal" '[ ! -e "$CLAUDE_SWITCH_HOME/journal.json" ]'
+check "...and nothing to repair" 'E status | grep -q "\"pendingRecovery\": false"'
+check "...and the account is unchanged" 'E status | grep -q "\"current\": \"$before\""'
+check "add fails the same way, no journal" '! CLAUDE_SWITCH_QUIT_FAIL=1 E add >/dev/null && [ ! -e "$CLAUDE_SWITCH_HOME/journal.json" ]'
+check "the next switch works" 'E switch BBBBBBBB | grep -q "\"ok\": true"'
+
+echo "journal during a running switch is not a repair (found in the live test)"
+echo '{"op":"switch","step":"started","target":"BBBBBBBB-2"}' > "$CLAUDE_SWITCH_HOME/journal.json"
+/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(3)" & holder=$!
+sleep 0.5
+st="$(E status)"
+check "status: switch running" 'echo "$st" | grep -q "\"switchRunning\": true"'
+check "status: no pending recovery while it runs" 'echo "$st" | grep -q "\"pendingRecovery\": false"'
+check "recover waits instead of failing" 'E recover | grep -q "\"running\": true"'
+check "journal is kept for the running switch" '[ -e "$CLAUDE_SWITCH_HOME/journal.json" ]'
+wait $holder
+check "after the lock is free, it is a pending recovery" 'E status | grep -q "\"pendingRecovery\": true"'
+E recover >/dev/null
+
+echo "update check (fake gh)"
+cat > "$T/gh" <<'GH'
+#!/bin/sh
+case "$1 $2" in
+  "release view") [ -n "$GH_FAIL" ] && { echo "HTTP 404: Not Found" >&2; exit 1; }
+                  echo '{"tagName":"v1.2.0","url":"https://example/r","publishedAt":"2026-11-08T00:00:00Z"}' ;;
+  "release download") for a; do case "$prev" in --dir) d="$a";; esac; prev="$a"; done
+                      echo 'echo installed' > "$d/install-release.sh" ;;
+esac
+GH
+chmod +x "$T/gh"; export CLAUDE_SWITCH_GH="$T/gh"
+check "newer release found" 'E update-check 1.0.0 | grep -q "\"available\": true"'
+check "same version is not newer" 'E update-check 1.2.0 | grep -q "\"available\": false"'
+check "dev build counts as older" 'E update-check 0.3.0-dev | grep -q "\"available\": true"'
+check "9.9.9 is newer than release 1.2.0 (numeric compare)" 'E update-check 9.9.9 | grep -q "\"available\": false"'
+check "gh error is reported, not a failure" 'GH_FAIL=1 E update-check 1.0.0 | grep -q "404"'
+check "update-install downloads the installer" 'E update-install v1.2.0 | grep -q install-release.sh'
+check "update-install refuses a bad tag" '! E update-install "v1; rm -rf /" >/dev/null'
+
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]
