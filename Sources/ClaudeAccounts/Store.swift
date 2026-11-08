@@ -104,7 +104,7 @@ final class Store: ObservableObject {
             "Claude quits, loads the saved login of this account, and opens again. Your current login is saved first, so you can switch back at any time.\n\nRunning tasks in Claude stop. Finish them first.",
             ok: "Switch") else { return }
         Task {
-            guard let r = await perform("Switching to \(a.title)…", ["switch", a.id]) else { return }
+            guard let r = await perform("Switching to \(a.title)… If Claude asks to confirm the quit, click Quit.", ["switch", a.id]) else { return }
             let shared = r["shared"] as? Int ?? 0
             let warning = r["warning"] as? String
             busy = "Checking the login…"

@@ -6,6 +6,10 @@
 #
 # Pass: every verify is ok, Claude ends on A, and no session file is lost.
 set -u
+if [ -n "${CLAUDECODE:-}" ]; then
+  echo "Run this in Terminal.app, not from Claude: a command that runs inside Claude stops Claude from quitting."
+  exit 2
+fi
 ENGINE="${ENGINE:-$HOME/.local/bin/claude-switch}"
 A="${1:?account A}"; B="${2:?account B}"; ROUNDS="${3:-3}"
 SESS="$HOME/Library/Application Support/Claude/claude-code-sessions"

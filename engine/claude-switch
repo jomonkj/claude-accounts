@@ -133,6 +133,17 @@ def lock():
         f.close()
 
 
+def lock_held():
+    """True while another engine process holds the lock (a switch is running now)."""
+    try:
+        with open(os.path.join(BASE, "lock"), "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(f, fcntl.LOCK_UN)
+        return False
+    except BlockingIOError:
+        return True
+
+
 def account_dirs():
     """{account: [org folders]} from the session store."""
     out = {}
@@ -263,16 +274,33 @@ def claude_running():
     return CLAUDE_BIN in out.splitlines()
 
 
+QUIT_WAIT = 90  # seconds; Claude may ask the user to confirm the quit
+
+
 def quit_claude():
+    if TEST and os.environ.get("CLAUDE_SWITCH_QUIT_FAIL"):
+        raise Fail("Claude did not quit (test).")
     if TEST or not claude_running():
         return
     subprocess.run(["osascript", "-e", f'tell application id "{BUNDLE_ID}" to quit'], capture_output=True)
-    for _ in range(60):
+    for _ in range(QUIT_WAIT * 2):
         if not claude_running():
             time.sleep(1)
             return
         time.sleep(0.5)
-    raise Fail("Claude did not quit. A dialog may be open in Claude. Quit it by hand, then try again.")
+    raise Fail(f"Claude did not quit within {QUIT_WAIT} seconds. Claude may be asking you to confirm the quit, "
+               "or a task is still running in it (for example, a command started from Claude itself). "
+               "Answer Claude's dialog or finish the task, then switch again. Nothing was changed.")
+
+
+def quit_or_cancel():
+    """Quit Claude. If that fails, no file has changed yet, so remove the journal and stop."""
+    try:
+        quit_claude()
+    except Fail:
+        end_journal()
+        log("cancelled before any change: Claude did not quit")
+        raise
 
 
 def open_claude(url=None):
@@ -551,9 +579,12 @@ def status():
         })
     accounts.sort(key=lambda x: (not x["current"], -x["sessions"], -x["lastUsed"], x["id"]))
     v = claude_version()
+    running = lock_held()
     return {"current": cur, "signedIn": has_login(), "claudeRunning": claude_running(),
             "claudeVersion": v, "versionTested": v in tested_versions(s),
-            "layoutProblems": layout_problems(), "pendingRecovery": pending() is not None,
+            "layoutProblems": layout_problems(),
+            # A journal while the lock is held is a switch in progress, not one to repair.
+            "switchRunning": running, "pendingRecovery": pending() is not None and not running,
             "settings": {k: val for k, val in s.items() if k not in ("labels", "importedV1Labels", "verifiedVersions", "owned")},
             "accounts": accounts, "paused": paused_sessions()}
 
@@ -581,7 +612,7 @@ def switch(target, force=False):
     with lock():
         log(f"switch to {target}")
         checkpoint("started", op="switch", target=target, source=current_account(), version=version)
-        quit_claude()
+        quit_or_cancel()
         save_current("switch")
         checkpoint("saved")
         load_login(os.path.join(PROFILES, target))
@@ -613,6 +644,8 @@ def verify(target, timeout=45):
     if current_account() == target and has_login():
         return remember_version()
     log(f"verify failed for {target}")
+    if current_account() != target:
+        return {"ok": False, "message": "Claude is not on this account. The switch did not finish."}
     return {"ok": False, "message": "Claude did not stay signed in. The saved login may have expired. Sign in again in Claude; the app saves the new login."}
 
 
@@ -633,7 +666,7 @@ def add(force=False):
     with lock():
         log("add account")
         checkpoint("started", op="add", target=None, source=current_account(), version=version)
-        quit_claude()
+        quit_or_cancel()
         save_current("switch")
         checkpoint("saved")
         load_login(None)
@@ -647,6 +680,8 @@ def recover():
     j = pending()
     if not j:
         return {"ok": True, "recovered": False}
+    if lock_held():
+        return {"ok": True, "recovered": False, "running": True}  # the switch is still going
     with lock():
         step = j.get("step")
         if step in ("loaded", "synced"):
