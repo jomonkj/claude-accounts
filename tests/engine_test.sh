@@ -85,6 +85,24 @@ check "label in status" 'echo "$st" | grep -q me@example.com'
 check "hidden in status" 'echo "$st" | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"].startswith(\"AAAA\") and a[\"hidden\"]] else 1)"'
 check "bad setting fails" '! E set nope 1 >/dev/null'
 
+echo "account order and pin"
+settings_of() { E status | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['settings']['$1'])"; }
+check "order is empty by default" '[ "$(settings_of order)" = "[]" ]'
+E order BBBBBBBB AAAAAAAA >/dev/null
+check "order saves full ids from short ids" '[ "$(settings_of order)" = "['"'"'BBBBBBBB-2'"'"', '"'"'AAAAAAAA-1'"'"']" ]'
+check "order with an unknown account fails" '! E order DDDD >/dev/null && grep -q Unknown "$T/err"'
+check "...and keeps the old order" '[ "$(settings_of order)" = "['"'"'BBBBBBBB-2'"'"', '"'"'AAAAAAAA-1'"'"']" ]'
+check "order with a repeated account fails" '! E order AAAAAAAA AAAAAAAA-1 >/dev/null'
+check "set cannot change order" '! E set order 1 >/dev/null'
+check "pinned is empty by default" '[ "$(settings_of pinned)" = "[]" ]'
+E pin AAAAAAAA >/dev/null
+check "pin adds the account" '[ "$(settings_of pinned)" = "['"'"'AAAAAAAA-1'"'"']" ]'
+E pin AAAAAAAA >/dev/null
+check "pin twice keeps one entry" '[ "$(settings_of pinned)" = "['"'"'AAAAAAAA-1'"'"']" ]'
+E unpin AAAAAAAA >/dev/null
+check "unpin removes the account" '[ "$(settings_of pinned)" = "[]" ]'
+check "pin of an unknown account fails" '! E pin DDDD >/dev/null'
+
 mkdir -p "$HOME/.claude-b"; echo '{"oauthAccount":{"accountUuid":"AAAAAAAA-1","emailAddress":"b@example.com"}}' > "$HOME/.claude-b/.claude.json"
 E label AAAAAAAA "" >/dev/null
 check "email from a second CLI config folder" 'E status | grep -q b@example.com'
@@ -167,6 +185,8 @@ mkdir -p "$S/$D/org4"; for i in 1 2; do echo "{\"sessionId\":\"local_d$i\"}" > "
 mkdir -p "$CLAUDE_SWITCH_HOME/profiles/$D"; echo '{"savedAt":1,"mode":"switch"}' > "$CLAUDE_SWITCH_HOME/profiles/$D/meta.json"
 E label "$D" "sam@example.com" >/dev/null; E mine DDDDDDDD >/dev/null; E hide DDDDDDDD >/dev/null
 cur="$(E status | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['current'])")"
+E order "$D" "$cur" >/dev/null; E pin DDDDDDDD >/dev/null; E pin "$cur" >/dev/null
+setting() { /usr/bin/python3 -c "import json;print(' '.join(json.load(open('$CLAUDE_SWITCH_HOME/settings.json')).get('$1') or []))"; }
 others() { (cd "$S" && find . -type f ! -path "./$D/*" -print0 | sort -z | xargs -0 shasum); }
 o_before="$(others)"
 check "remove the current account is refused" '! E remove "$cur" >/dev/null && grep -q "current account" "$T/err"'
@@ -188,6 +208,7 @@ check "session folder is gone" '[ ! -e "$S/$D" ]'
 check "session folder moved into the backups" '[ -f "$CLAUDE_SWITCH_BACKUPS/$bk/$D/org4/local_d2.json" ]'
 check "saved login deleted" '[ ! -e "$CLAUDE_SWITCH_HOME/profiles/$D" ]'
 check "label, owned and hidden removed" '! grep -q "$D" "$CLAUDE_SWITCH_HOME/settings.json"'
+check "removed from order and pinned, others kept" '[ "$(setting order)" = "$cur" ] && [ "$(setting pinned)" = "$cur" ]'
 check "other accounts unchanged" '[ "$(others)" = "$o_before" ]'
 check "no journal left" '[ ! -e "$CLAUDE_SWITCH_HOME/journal.json" ]'
 check "removal is in the log" 'grep -q "removed account $D" "$CLAUDE_SWITCH_HOME/switch.log"'
@@ -199,6 +220,22 @@ E restore "$bk" >/dev/null
 check "restore brings the sessions back" '[ -f "$S/$D/org4/local_d1.json" ] && [ -f "$S/$D/org4/local_d2.json" ]'
 check "...and keeps the other accounts" '[ "$(others)" = "$o_before" ]'
 check "...and the account is not mine" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"$D\" and not a[\"owned\"] and not a[\"savedLogin\"]] else 1)"'
+
+echo "sign in to save (save-login)"
+mkdir -p "$A/claude-code-sessions/DDDDDDDD-4/org4"
+login_as BBBBBBBB-2 cookieB; E add >/dev/null
+check "waits while Claude is signed out" 'E save-login DDDDDDDD | grep -q "\"waiting\": true"'
+login_as BBBBBBBB-2 cookieB2
+out="$(E save-login DDDDDDDD)"
+check "other account signed in: mismatch" 'echo "$out" | grep -q "\"match\": false"'
+check "...and the message names the signed-in account" 'echo "$out" | grep -q "BBBBBBBB-2"'
+check "...and no login saved for the picked account" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4" ]'
+login_as DDDDDDDD-4 cookieD
+out="$(E save-login DDDDDDDD)"
+check "picked account signed in: saved" 'echo "$out" | grep -q "\"saved\": true"'
+check "...and the login is in the profile" '[ -f "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4/meta.json" ]'
+check "status shows the saved login" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"DDDDDDDD-4\" and a[\"savedLogin\"]] else 1)"'
+check "unknown account fails" '! E save-login ZZZZ >/dev/null'
 
 echo "update check (fake gh)"
 cat > "$T/gh" <<'GH'
@@ -218,5 +255,35 @@ check "9.9.9 is newer than release 1.2.0 (numeric compare)" 'E update-check 9.9.
 check "gh error is reported, not a failure" 'GH_FAIL=1 E update-check 1.0.0 | grep -q "404"'
 check "update-install downloads the installer" 'E update-install v1.2.0 | grep -q install-release.sh'
 check "update-install refuses a bad tag" '! E update-install "v1; rm -rf /" >/dev/null'
+
+echo "debug report"
+# own fake Mac with real-shaped account IDs (last block, so the env can change)
+R="$T/report"; export CLAUDE_APP_DIR="$R/app" CLAUDE_SWITCH_HOME="$R/home" HOME="$R/userhome"
+IA=aaaa1111-1111-4111-8111-111111111111; IB=bbbb2222-2222-4222-8222-222222222222
+mkdir -p "$R/app/claude-code-sessions/$IA/o1" "$R/app/claude-code-sessions/$IB/o2" "$R/home" "$HOME"
+echo "{\"lastKnownAccountUuid\":\"$IA\"}" > "$R/app/config.json"
+{ echo "2026-11-01 10:00:00 switch to $IB"
+  echo "2026-11-01 10:00:01 saved login of ${IA:0:8} (switch)"
+  echo "2026-11-01 10:00:02 switched to $IB"
+} > "$R/home/switch.log"
+out="$(E report)"; rc=$?
+check "report runs" '[ "$rc" = 0 ] && echo "$out" | grep -q "debug report"'
+check "report has no account ID" '! echo "$out" | grep -qE "[0-9a-f]{8}-[0-9a-f]{4}|aaaa1111|bbbb2222"'
+check "same account, same placeholder" 'echo "$out" | grep -q "switch to account 2" && echo "$out" | grep -q "switched to account 2" && echo "$out" | grep -q "saved login of account 1 "'
+echo "{\"oauthAccount\":{\"accountUuid\":\"$IB\",\"emailAddress\":\"sam@example.com\"}}" > "$HOME/.claude.json"
+E label "${IA:0:8}" "alex@example.com" >/dev/null
+{ echo "2026-11-01 10:00:03 note sam@example.com and Other.Person@mail.example.org"
+  echo "2026-11-01 10:00:04 backup -> $HOME/Backups/claude-sessions/2026-11-01"
+  echo "2026-11-01 10:00:05 backup -> /Users/demo.user/Backups/claude-sessions/2026-11-01"
+} >> "$R/home/switch.log"
+out="$(E report)"
+check "report has no email and no ID (the pass check)" '[ "$(echo "$out" | grep -cE "[0-9a-f]{8}-[0-9a-f]{4}|@")" = 0 ]'
+check "known email gets its account placeholder" 'echo "$out" | grep -q "note account 2 and account 3"'
+check "labels are not in the report" '! echo "$out" | grep -qi alex'
+check "home folder shown as ~" 'echo "$out" | grep -q "backup -> ~/Backups" && ! echo "$out" | grep -q "$R"'
+check "another user folder shown as ~" '! echo "$out" | grep -q "demo.user"'
+check "report has versions, layout, settings" 'echo "$out" | grep -q "Claude version:" && echo "$out" | grep -q "Layout check:" && echo "$out" | grep -q "syncOnSwitch"'
+for i in $(seq 1 300); do echo "2026-11-02 10:00:00 line $i"; done >> "$R/home/switch.log"
+check "only the last 200 log lines" '[ "$(E report | grep -c "  2026-")" = 200 ] && E report | grep -q "line 300" && ! E report | grep -q "line 100$"'
 
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]

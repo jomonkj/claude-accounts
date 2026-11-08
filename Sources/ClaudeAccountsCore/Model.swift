@@ -22,6 +22,9 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
         return String(first.prefix(12))
     }
 
+    /// Show "Sign in to save": no saved login, and not the account Claude uses now.
+    public var needsSignInToSave: Bool { !savedLogin && !current }
+
     public var initials: String {
         let base = name.isEmpty ? String(id.prefix(2)) : name
         let parts = base.split(whereSeparator: { " @._-()".contains($0) }).prefix(2)
@@ -64,6 +67,10 @@ public struct EngineSettings: Decodable, Equatable, Sendable {
     public var backupKeep: Int
     public var showNameInMenuBar: Bool
     public var hidden: [String]
+    /// Account IDs in the order the user chose. Accounts not in the list go last.
+    public var order: [String]
+    /// Account IDs pinned to the top of the panel.
+    public var pinned: [String]
 }
 
 /// Output of `claude-switch sync --dry-run` and `sync`.

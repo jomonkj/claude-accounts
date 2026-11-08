@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import ClaudeAccountsCore
 
-/// The Settings window: General, Accounts, Sync, Backups, Advanced.
+/// The Settings window: General, Accounts, Sync, Backups, Advanced, About.
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @State var tab: String = "general"
@@ -14,6 +14,7 @@ struct SettingsView: View {
             SyncTab().tabItem { Label("Sync", systemImage: "arrow.triangle.2.circlepath") }.tag("sync")
             BackupsTab().tabItem { Label("Backups", systemImage: "externaldrive") }.tag("backups")
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
+            AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
         .frame(width: 620, height: 440)
         .environmentObject(store)
@@ -88,9 +89,10 @@ struct AccountsTab: View {
     @EnvironmentObject var store: Store
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Table(store.accounts) {
+            Table(of: Account.self) {
                 TableColumn("Account") { a in
                     HStack(spacing: 8) {
+                        if store.isPinned(a) { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary) }
                         Avatar(account: a, size: 22)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(a.title).lineLimit(1).truncationMode(.middle)
@@ -114,19 +116,24 @@ struct AccountsTab: View {
                 TableColumn("") { a in
                     Menu {
                         Button("Rename…") { store.rename(a) }
+                        Button(store.isPinned(a) ? "Unpin" : "Pin to top") { store.setPinned(a, !store.isPinned(a)) }
                         if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
                         Button("Remove account…") { store.remove(a) }.disabled(a.current)
+                        if a.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(a) } }
                         Button("Copy account ID") {
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
                         }
                     } label: { Image(systemName: "ellipsis.circle") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.width(30)
+            } rows: {
+                ForEach(store.accounts) { a in TableRow(a).draggable(a.id) }
+                    .dropDestination(for: String.self) { index, ids in store.reorder(ids, to: index) }
             }
             HStack {
                 Button { store.addAccount() } label: { Label("Add account…", systemImage: "person.badge.plus") }
                 Spacer()
-                Text("Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
+                Text("Drag to sort. Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding()
@@ -238,5 +245,42 @@ struct AdvancedTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+struct AboutTab: View {
+    @EnvironmentObject var store: Store
+    @State var reportMessage = ""
+
+    var body: some View {
+        Form {
+            Section("Claude Accounts") {
+                LabeledContent("Version", value: Store.version)
+            }
+            Section("Report a problem") {
+                Text("The debug report has the app and Claude versions, the layout check, the settings and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("Copy debug report") { Task { reportMessage = await store.copyDebugReport() } }
+                    Text(reportMessage).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            UninstallSection()
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct UninstallSection: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        Section("Uninstall") {
+            HStack {
+                Text("Remove the app, the login item and the CLI commands. Saved logins and backups stay.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("Uninstall…") { store.uninstall() }  // the engine refuses while a switch runs
+            }
+        }
     }
 }

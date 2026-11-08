@@ -87,8 +87,10 @@ final class Store: ObservableObject {
 
     // MARK: derived state (see ClaudeAccountsCore/Logic.swift)
 
-    var accounts: [Account] { status?.accounts ?? [] }
-    var visibleAccounts: [Account] { status?.visibleAccounts(showHidden: showHidden) ?? [] }
+    /// All accounts in panel order (Settings → Accounts).
+    var accounts: [Account] { status?.panelOrder(showHidden: true) ?? [] }
+    var visibleAccounts: [Account] { status?.panelOrder(showHidden: showHidden) ?? [] }
+    func isPinned(_ a: Account) -> Bool { status?.isPinned(a.id) ?? false }
     var hiddenCount: Int { status?.hiddenCount ?? 0 }
     var current: Account? { status?.currentAccount }
     func account(_ id: String) -> Account? { status?.account(id) }
@@ -132,6 +134,35 @@ final class Store: ObservableObject {
                 banner = .info("Sign in to the new account in Claude. The app saves the login within 5 minutes, or when you switch.")
             }
         }
+    }
+
+    /// "Sign in to save": the `add` flow, then wait until Claude is signed in to the picked account.
+    func signInToSave(_ a: Account) {
+        guard Dialog.confirm("Sign in to \(a.title) to save its login?",
+            "1. Claude quits. Your current login is saved first.\n2. Claude opens signed out.\n3. In Claude, sign in to \(a.title).\n4. The app sees the sign-in and saves the login. It tells you when the login is saved.\n\nRunning tasks in Claude stop. Finish them first.",
+            ok: "Continue") else { return }
+        Task {
+            guard await perform("Saving your login…", ["add"]) != nil else { return }
+            banner = .info("Now sign in to \(a.title) in Claude. The app waits for the sign-in.")
+            await waitForSignIn(a)
+        }
+    }
+
+    private func waitForSignIn(_ a: Account) async {
+        let end = Date().addingTimeInterval(15 * 60)
+        while Date() < end {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            let r = await run(["save-login", a.id])
+            guard r.ok else { banner = .error(r.output); return }
+            if let b = Status.signInResult(r.json, title: a.title) {
+                banner = b
+                await refresh()
+                if case .success(let t) = b { notifier.say("Login saved", t) }
+                else if case .warning(let t) = b { notifier.say("Different account", t) }
+                return
+            }
+        }
+        banner = .info("No sign-in to \(a.title) in 15 minutes. Click Sign in to save to try again.")
     }
 
     func syncNow() {
@@ -213,6 +244,16 @@ final class Store: ObservableObject {
         Task { await perform("Saving…", [hide ? "hide" : "unhide", a.id]) }
     }
 
+    func setPinned(_ a: Account, _ pin: Bool) {
+        Task { await perform("Saving…", [pin ? "pin" : "unpin", a.id]) }
+    }
+
+    /// Saves the order after a drag in Settings → Accounts.
+    func reorder(_ ids: [String], to index: Int) {
+        guard let order = status?.orderAfterMove(ids, to: index), order != accounts.map(\.id) else { return }
+        Task { await perform("Saving…", ["order"] + order) }
+    }
+
     func set(_ key: String, _ value: Bool) {
         Task { await perform("Saving…", ["set", key, value ? "true" : "false"]) }
     }
@@ -242,6 +283,27 @@ final class Store: ObservableObject {
             if await perform("Downloading \(tag)…", ["update-install", tag]) != nil {
                 busy = "Installing \(tag)…"  // the installer stops this app and opens the new one
             }
+        }
+    }
+
+    // MARK: uninstall
+
+    func uninstall() {
+        guard Dialog.confirm("Uninstall Claude Accounts?",
+            """
+            This removes the app, the login item and the claude-switch and claude-accounts commands. \
+            Claude and its sessions do not change.
+
+            These stay, so you can install again without losing anything:
+            • Saved logins and settings: ~/Library/Application Support/Claude Account Switcher
+            • Backups: ~/Backups/claude-sessions
+            """, ok: "Uninstall") else { return }
+        Task {
+            busy = "Uninstalling…"; banner = nil
+            // The engine stops this app when it is done, so there is nothing to refresh after it.
+            let r = await run(["uninstall"])
+            busy = nil
+            if r.ok { NSApp.terminate(nil) } else { banner = .error(r.output) }
         }
     }
 
@@ -295,6 +357,16 @@ final class Store: ObservableObject {
         guard let out else { return }
         banner = .success(b.isRemoved ? "The sessions of the removed account are back."
             : "Restored \(b.title). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
+    }
+
+    /// Copies the engine's debug report (no emails, no account IDs) to the clipboard.
+    /// Returns a short message for the user.
+    func copyDebugReport() async -> String {
+        let r = await run(["report"])
+        guard r.ok, !r.output.isEmpty else { return "Cannot make the report: \(r.output)" }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(r.output, forType: .string)
+        return "Report copied. It has no emails and no account IDs."
     }
 
     func openLog() {

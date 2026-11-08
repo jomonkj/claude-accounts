@@ -11,6 +11,33 @@ public extension Status {
         accounts.filter { showHidden || !$0.hidden || $0.current }
     }
 
+    /// Accounts in panel order: pinned accounts first, then the saved order, then accounts
+    /// not in the saved order (new ones) in engine order. The panel, Settings and the
+    /// next-account shortcut all use this order.
+    func panelOrder(showHidden: Bool) -> [Account] {
+        let rank = Dictionary(settings.order.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let pinned = Set(settings.pinned)
+        func key(_ e: (offset: Int, element: Account)) -> (Int, Int, Int) {
+            (pinned.contains(e.element.id) ? 0 : 1, rank[e.element.id] ?? Int.max, e.offset)
+        }
+        return visibleAccounts(showHidden: showHidden).enumerated()
+            .sorted { key($0) < key($1) }
+            .map(\.element)
+    }
+
+    /// The full saved order after a drag in Settings: `ids` move to `index` of the panel order
+    /// with hidden accounts shown (an insert index, as in a SwiftUI drop).
+    func orderAfterMove(_ ids: [String], to index: Int) -> [String] {
+        let all = panelOrder(showHidden: true).map(\.id)
+        let moving = all.filter { ids.contains($0) }
+        let before = all.prefix(max(0, min(index, all.count))).filter { ids.contains($0) }.count
+        var rest = all.filter { !ids.contains($0) }
+        rest.insert(contentsOf: moving, at: max(0, min(index - before, rest.count)))
+        return rest
+    }
+
+    func isPinned(_ id: String) -> Bool { settings.pinned.contains(id) }
+
     var hiddenCount: Int { accounts.filter { $0.hidden && !$0.current }.count }
 
     /// Text next to the menu bar icon, or "" when the setting is off.
@@ -64,6 +91,17 @@ public extension Status {
          + "Sync no longer uses it. Its sessions move into the backups. "
          + "To get them back, restore \"Removed account \(a.id.prefix(8))\" in Backups.\n\n"
          + "The account comes back only when you sign in to it again in Claude.")
+    }
+
+    /// Banner for the result of `claude-switch save-login <account>`, or nil while Claude is not signed in yet.
+    static func signInResult(_ json: [String: Any], title: String) -> Banner? {
+        if json["saved"] as? Bool == true {
+            return .success("Login of \(title) is saved. You can now switch to it with one click.")
+        }
+        if json["match"] as? Bool == false {
+            return .warning(json["message"] as? String ?? "Claude is signed in to a different account. The login was not saved under \(title).")
+        }
+        return nil
     }
 
     var ownedAccounts: [Account] { accounts.filter(\.owned) }

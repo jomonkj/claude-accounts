@@ -117,6 +117,45 @@ func main() async {
     check("paused row: reset not known", unknown.pausedSubtitle(unknown.paused[0], now: resetAt, timeZone: ist)
           == "Limit reached · jomon")
 
+    print("Account order")
+    let C = "cccc3333-0000-0000-0000-000000000000"
+    func ordered(order: [String], pinned: [String] = []) -> Status {
+        let json = try! String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"order\": []", with: "\"order\": [\(order.map { "\"\($0)\"" }.joined(separator: ","))]")
+            .replacingOccurrences(of: "\"pinned\": []", with: "\"pinned\": [\(pinned.map { "\"\($0)\"" }.joined(separator: ","))]")
+        return try! JSONDecoder().decode(Status.self, from: Data(json.utf8))
+    }
+    check("no saved order: engine order", s.panelOrder(showHidden: false).map(\.id) == [A, B])
+    check("saved order is used", ordered(order: [B, A]).panelOrder(showHidden: false).map(\.id) == [B, A])
+    check("new account goes to the end", ordered(order: [C, B]).panelOrder(showHidden: true).map(\.id) == [C, B, A])
+    check("unknown id in the order is ignored",
+          ordered(order: ["dddd4444-0000-0000-0000-000000000000", B]).panelOrder(showHidden: false).map(\.id) == [B, A])
+    check("pinned account comes first", ordered(order: [], pinned: [B]).panelOrder(showHidden: false).map(\.id) == [B, A])
+    check("pinned first, then saved order, then new",
+          ordered(order: [A, C], pinned: [B]).panelOrder(showHidden: true).map(\.id) == [B, A, C])
+    check("pinned accounts keep the saved order among them",
+          ordered(order: [A, B, C], pinned: [C, B]).panelOrder(showHidden: true).map(\.id) == [B, C, A])
+    check("hidden pinned account stays hidden", ordered(order: [], pinned: [C]).panelOrder(showHidden: false).map(\.id) == [A, B])
+    check("drag down: order after move", s.orderAfterMove([A], to: 2) == [B, A, C])
+    check("drag up: order after move", s.orderAfterMove([C], to: 0) == [C, A, B])
+    check("drag to the same place keeps the order", s.orderAfterMove([B], to: 1) == [A, B, C])
+    check("drag of an unknown id changes nothing", s.orderAfterMove(["dddd4444"], to: 0) == [A, B, C])
+    check("isPinned", ordered(order: [], pinned: [B]).isPinned(B) && !s.isPinned(B))
+
+    print("Sign in to save")
+    check("button only on accounts without a saved login", s.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
+    let curNoLogin = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"savedLogin\": true, \"savedAt\": 1794124745.0", with: "\"savedLogin\": false, \"savedAt\": 1794124745.0").utf8))
+    check("no button on the current account, even without a saved login",
+          curNoLogin.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
+    check("sign-in result: still waiting", Status.signInResult(["ok": true, "saved": false, "waiting": true], title: "Test") == nil)
+    check("sign-in result: saved", Status.signInResult(["ok": true, "saved": true, "match": true], title: "Test")
+          == .success("Login of Test is saved. You can now switch to it with one click."))
+    if case .warning(let t)? = Status.signInResult(["ok": true, "saved": false, "match": false, "message": "Claude is signed in to a different account."], title: "Test") {
+        check("sign-in result: mismatch is a warning with the engine message", t.contains("different account"))
+    } else { check("sign-in result: mismatch is a warning with the engine message", false) }
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")
