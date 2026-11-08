@@ -101,6 +101,23 @@ echo '{"sessionId":"local_p1","cliSessionId":"cli-p1","title":"Paused one"}' > "
 echo '{"type":"assistant","isApiErrorMessage":true,"timestamp":"2026-11-07T12:00:00Z","message":{"content":[{"type":"text","text":"You'"'"'ve hit your session limit · resets 8pm (Asia/Calcutta)"}]}}' > "$HOME/.claude/projects/p/cli-p1.jsonl"
 check "paused listed with reset time" 'E status | grep -q "8pm (Asia/Calcutta)"'
 
+echo "resetsAt from the reset text"
+resets_at() { # <reset text> <stoppedAt> -> resetsAt of the paused session ("None" when null)
+  echo '{"type":"assistant","isApiErrorMessage":true,"timestamp":"'"$2"'","message":{"content":[{"type":"text","text":"You'"'"'ve hit your session limit · '"$1"'"}]}}' > "$HOME/.claude/projects/p/cli-p1.jsonl"
+  E status | /usr/bin/python3 -c "import json,sys;p=json.load(sys.stdin)['paused'];print(p[0]['resetsAt'] if p else 'missing')"
+}
+epoch() { date -ju -f %Y-%m-%dT%H:%M:%SZ "$1" +%s; }
+check "8pm later the same day" '[ "$(resets_at "resets 8pm (Asia/Calcutta)" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-07T14:30:00Z)" ]'
+check "4:50pm already passed: next day" '[ "$(resets_at "resets 4:50pm (Asia/Calcutta)" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-08T11:20:00Z)" ]'
+check "12:30am after midnight" '[ "$(resets_at "resets 12:30am (Asia/Calcutta)" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-07T19:00:00Z)" ]'
+check "date and time (weekly limit)" '[ "$(resets_at "resets Nov 10, 5pm (America/New_York)" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-10T22:00:00Z)" ]'
+check "date at the turn of the year" '[ "$(resets_at "resets Jan 2, 9am (UTC)" 2026-12-30T12:00:00Z)" = "$(epoch 2027-01-02T09:00:00Z)" ]'
+check "weekday and time" '[ "$(resets_at "resets Mon 12:00am (UTC)" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-09T00:00:00Z)" ]'
+check "no time zone: local time" '[ "$(TZ=UTC resets_at "resets 3pm" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-07T15:00:00Z)" ]'
+check "unreadable text is null" '[ "$(resets_at "resets soon" 2026-11-07T12:00:00Z)" = None ]'
+check "unknown time zone is null" '[ "$(resets_at "resets 8pm (Mars/Base)" 2026-11-07T12:00:00Z)" = None ]'
+check "no reset text is null" '[ "$(resets_at "try again later" 2026-11-07T12:00:00Z)" = None ]'
+
 echo "version and layout guard"
 E label BBBBBBBB-2 "" >/dev/null
 login_as BBBBBBBB-2 cookieB; E add >/dev/null; login_as AAAAAAAA-1 cookieA

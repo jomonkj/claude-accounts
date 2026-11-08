@@ -67,6 +67,12 @@ struct AccountRow: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     Text(account.loginText)
                         .font(.system(size: 10)).foregroundStyle(account.savedLogin ? .green : .secondary).lineLimit(1)
+                    // Re-check every 30 s, so the line goes away when the reset time passes.
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        if let line = store.status?.resetLine(for: account.id, now: ctx.date) {
+                            Text(line).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
                 }
                 Spacer(minLength: 6)
                 trailing
@@ -112,7 +118,9 @@ struct PausedRow: View {
                 Image(systemName: "pause.circle.fill").font(.system(size: 22)).foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.title).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
-                    Text(subtitle).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        Text(subtitle(ctx.date)).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 6)
                 Button("Open") { store.open(session) }.controlSize(.small)
@@ -121,9 +129,8 @@ struct PausedRow: View {
         }
     }
 
-    var subtitle: String {
-        let who = store.account(session.account)?.shortTitle ?? String(session.account.prefix(8))
-        return (session.resets.isEmpty ? "Limit reached" : "Limit resets \(session.resets)") + " · \(who)"
+    func subtitle(_ now: Date) -> String {
+        store.status?.pausedSubtitle(session, now: now) ?? "Limit reached"
     }
 }
 
