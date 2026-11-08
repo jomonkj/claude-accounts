@@ -11,6 +11,8 @@ final class Store: ObservableObject {
     @Published var banner: Banner?
     @Published var launchAtLogin = LoginItem.isEnabled
     @Published var showHidden = false
+    @Published var backups: [BackupInfo] = []
+    private var windows: [String: NSWindow] = [:]
 
     let engine: EngineClient
     let notifier = Notifier()
@@ -24,6 +26,9 @@ final class Store: ObservableObject {
             self.switchTo(a)
         }
         notifier.start()
+        if !UserDefaults.standard.bool(forKey: "welcomeDone") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
+        }
         Task { await tick() }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { await self?.tick() }
@@ -204,6 +209,53 @@ final class Store: ObservableObject {
 
     func open(_ p: PausedSession) {
         Task { await perform("Opening…", ["open-session", p.id]) }
+    }
+
+    // MARK: windows
+
+    /// Opens (or brings to front) a normal window. The app is a menu bar app, so it must
+    /// activate itself for the window to come to the front.
+    func open<V: View>(_ id: String, title: String, _ view: V) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let w = windows[id] { w.makeKeyAndOrderFront(nil); return }
+        let w = NSWindow(contentViewController: NSHostingController(rootView: view.environmentObject(self)))
+        w.title = title
+        w.styleMask = [.titled, .closable, .miniaturizable]
+        w.isReleasedWhenClosed = false
+        w.center()
+        w.makeKeyAndOrderFront(nil)
+        windows[id] = w
+    }
+
+    func showSettings(tab: String = "general") {
+        windows["settings"]?.close(); windows["settings"] = nil
+        open("settings", title: "Claude Accounts Settings", SettingsView(tab: tab))
+    }
+
+    func showWelcome() {
+        open("welcome", title: "Welcome to Claude Accounts",
+             WelcomeView(close: { [weak self] in self?.windows["welcome"]?.close() }))
+    }
+
+    func finishWelcome() { UserDefaults.standard.set(true, forKey: "welcomeDone") }
+
+    func loadBackups() async {
+        let r = await run(["backups"])
+        guard r.ok, let data = try? JSONSerialization.data(withJSONObject: r.json["backups"] ?? []),
+              let list = try? JSONDecoder().decode([BackupInfo].self, from: data) else { return }
+        backups = list
+    }
+
+    func restore(_ name: String) {
+        guard Dialog.confirm("Restore the backup \(name)?",
+            "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+            ok: "Restore") else { return }
+        Task {
+            if let out = await perform("Restoring…", ["restore", name]) {
+                banner = .success("Restored \(name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
+            }
+            await loadBackups()
+        }
     }
 
     func openLog() {
