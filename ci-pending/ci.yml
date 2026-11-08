@@ -12,10 +12,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Engine tests
         run: tests/engine_test.sh
+      - name: Crash test
+        run: tests/crash_test.sh
+      - name: Sync property test (500 cases)
+        run: tests/sync_property_test.py 500
       - name: Core tests
         run: swift run CoreTests
       - name: Universal build
         run: scripts/build.sh "ci-${GITHUB_SHA::7}"
+      - name: Install test
+        run: tests/install_test.sh
       - name: Check architectures
         run: |
           archs="$(lipo -archs "build/Claude Accounts.app/Contents/MacOS/ClaudeAccounts")"

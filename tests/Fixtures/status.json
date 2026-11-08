@@ -1,8 +1,9 @@
 {"current": "aaaa1111-0000-0000-0000-000000000000", "signedIn": true, "claudeRunning": true,
- "settings": {"shareSessions": false, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7, "showNameInMenuBar": true, "hidden": ["cccc3333-0000-0000-0000-000000000000"]},
+ "claudeVersion": "4.23118.0", "versionTested": true, "layoutProblems": [], "pendingRecovery": false,
+ "settings": {"syncOnSwitch": false, "syncConfirmed": false, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7, "showNameInMenuBar": true, "hidden": ["cccc3333-0000-0000-0000-000000000000"]},
  "accounts": [
-  {"id": "aaaa1111-0000-0000-0000-000000000000", "name": "", "sessions": 3, "lastUsed": 1794124745.0, "savedLogin": true, "savedAt": 1794124745.0, "savedMode": "auto", "current": true, "hidden": false},
-  {"id": "bbbb2222-0000-0000-0000-000000000000", "name": "jomon@example.com (Team)", "sessions": 728, "lastUsed": 1794120000.0, "savedLogin": true, "savedAt": 1794120000.0, "savedMode": "switch", "current": false, "hidden": false},
-  {"id": "cccc3333-0000-0000-0000-000000000000", "name": "Test", "sessions": 0, "lastUsed": 0, "savedLogin": false, "savedAt": 0, "savedMode": "", "current": false, "hidden": true}
+  {"id": "aaaa1111-0000-0000-0000-000000000000", "name": "", "sessions": 3, "lastUsed": 1794124745.0, "savedLogin": true, "savedAt": 1794124745.0, "savedMode": "auto", "current": true, "hidden": false, "owned": true},
+  {"id": "bbbb2222-0000-0000-0000-000000000000", "name": "jomon@example.com (Team)", "sessions": 728, "lastUsed": 1794120000.0, "savedLogin": true, "savedAt": 1794120000.0, "savedMode": "switch", "current": false, "hidden": false, "owned": true},
+  {"id": "cccc3333-0000-0000-0000-000000000000", "name": "Test", "sessions": 0, "lastUsed": 0, "savedLogin": false, "savedAt": 0, "savedMode": "", "current": false, "hidden": true, "owned": false}
  ],
  "paused": [{"id": "local_p1", "title": "AWS capacity", "account": "bbbb2222-0000-0000-0000-000000000000", "cwd": "/x", "message": "You've hit your session limit", "resets": "4:50pm (Asia/Calcutta)", "stoppedAt": "2026-11-08T10:00:00Z"}]}

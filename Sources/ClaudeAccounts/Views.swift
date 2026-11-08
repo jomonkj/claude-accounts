@@ -53,7 +53,16 @@ struct AccountRow: View {
             HStack(spacing: 10) {
                 Avatar(account: account)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                    HStack(spacing: 5) {
+                        Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                        if account.owned {
+                            Text("MINE").font(.system(size: 8.5, weight: .bold))
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.accentColor.opacity(0.18)))
+                                .foregroundStyle(Color.accentColor)
+                                .help("Marked as mine: sync includes this account")
+                        }
+                    }
                     Text("\(account.sessions) sessions · \(account.lastUsedText)")
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     Text(account.loginText)
@@ -65,6 +74,7 @@ struct AccountRow: View {
         }
         .contextMenu {
             Button("Rename…") { store.rename(account) }
+            Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
             if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
             if !account.current {
                 Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
@@ -141,52 +151,6 @@ struct BannerView: View {
     }
 }
 
-struct SettingsSection: View {
-    @EnvironmentObject var store: Store
-    @State private var open = false
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $open) {
-            VStack(alignment: .leading, spacing: 8) {
-                toggle("Share sessions on every switch", "Copy new or newer sessions into the account you switch to.",
-                       \.shareSessions, "shareSessions")
-                toggle("Save logins automatically", "Every 5 minutes, save the login Claude uses now.",
-                       \.autoSaveLogins, "autoSaveLogins")
-                toggle("Daily backup", "Copy all session lists to ~/Backups/claude-sessions once a day.",
-                       \.dailyBackup, "dailyBackup")
-                toggle("Show account name in menu bar", nil, \.showNameInMenuBar, "showNameInMenuBar")
-                HStack {
-                    Text("Keep backups").font(.system(size: 12))
-                    Spacer()
-                    Stepper("\(store.status?.settings.backupKeep ?? 7) days", value: Binding(
-                        get: { store.status?.settings.backupKeep ?? 7 },
-                        set: { store.setNumber("backupKeep", max(1, min(60, $0))) }), in: 1...60)
-                        .font(.system(size: 12)).controlSize(.small)
-                }
-                Toggle("Open at login", isOn: Binding(
-                    get: { store.launchAtLogin },
-                    set: { LoginItem.set($0); store.launchAtLogin = LoginItem.isEnabled }))
-                    .toggleStyle(.switch).controlSize(.mini).font(.system(size: 12))
-            }
-            .padding(.top, 6)
-        } label: {
-            Label("Settings", systemImage: "gearshape").font(.system(size: 12, weight: .medium))
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-    }
-
-    func toggle(_ title: String, _ help: String?, _ kp: KeyPath<EngineSettings, Bool>, _ key: String) -> some View {
-        Toggle(isOn: Binding(get: { store.status?.settings[keyPath: kp] ?? false },
-                             set: { store.set(key, $0) })) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12))
-                if let help { Text(help).font(.system(size: 10)).foregroundStyle(.secondary) }
-            }
-        }
-        .toggleStyle(.switch).controlSize(.mini)
-    }
-}
-
 struct MenuView: View {
     @EnvironmentObject var store: Store
 
@@ -195,6 +159,18 @@ struct MenuView: View {
             header
             Divider()
             if let b = store.banner { BannerView(banner: b) { store.banner = nil } }
+            if let u = store.update, u.available, let tag = u.latest {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
+                    Text("Version \(tag) is available.").font(.system(size: 11))
+                    Spacer()
+                    Button("Update") { store.installUpdate() }.controlSize(.small).disabled(store.busy != nil)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue.opacity(0.1)))
+                .padding(.horizontal, 10).padding(.top, 8)
+            }
+            if let g = store.status?.guardBanner, store.banner == nil { BannerView(banner: g) {} }
             if let w = store.wrongAccountHint, store.banner == nil { BannerView(banner: .warning(w)) {} }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -223,8 +199,6 @@ struct MenuView: View {
             .fixedSize(horizontal: false, vertical: true)
             Divider()
             actions
-            Divider()
-            SettingsSection()
             Divider()
             footer
         }
@@ -262,8 +236,12 @@ struct MenuView: View {
     var actions: some View {
         HStack(spacing: 8) {
             Button { store.addAccount() } label: { Label("Add account", systemImage: "person.badge.plus") }
-            Button { store.shareNow() } label: { Label("Share now", systemImage: "arrow.triangle.merge") }
-            Button { store.backup() } label: { Label("Back up", systemImage: "externaldrive") }
+            Button { store.syncNow() } label: { Label("Sync now", systemImage: "arrow.triangle.2.circlepath") }
+            Menu {
+                Button("Back up now") { store.backup() }
+                Button("Restore a backup…") { store.restoreBackup() }
+            } label: { Label("Backups", systemImage: "externaldrive") }
+            .menuStyle(.borderlessButton).fixedSize()
         }
         .controlSize(.small).disabled(store.busy != nil)
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -274,7 +252,7 @@ struct MenuView: View {
             Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
             Spacer()
-            Button("Log") { store.openLog() }
+            Button("Settings…") { store.showSettings() }.keyboardShortcut(",")
             Button("Open Claude") { NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Claude.app")) }
             Button("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q")
         }

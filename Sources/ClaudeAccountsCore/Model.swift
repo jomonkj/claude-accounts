@@ -11,6 +11,7 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public let savedMode: String
     public let current: Bool
     public let hidden: Bool
+    public let owned: Bool
 
     public var title: String { name.isEmpty ? "Account \(id.prefix(8))" : name }
 
@@ -54,7 +55,8 @@ public struct PausedSession: Identifiable, Decodable, Equatable, Sendable {
 }
 
 public struct EngineSettings: Decodable, Equatable, Sendable {
-    public var shareSessions: Bool
+    public var syncOnSwitch: Bool
+    public var syncConfirmed: Bool
     public var autoSaveLogins: Bool
     public var dailyBackup: Bool
     public var backupKeep: Int
@@ -62,11 +64,39 @@ public struct EngineSettings: Decodable, Equatable, Sendable {
     public var hidden: [String]
 }
 
+/// Output of `claude-switch sync --dry-run` and `sync`.
+public struct SyncResult: Decodable, Equatable, Sendable {
+    public let changes: Int
+    public let accounts: [String: Int]
+    public let skipped: [String]
+    public let dryRun: Bool
+}
+
+/// Output of `claude-switch update-check <version>`.
+public struct UpdateInfo: Decodable, Equatable, Sendable {
+    public let available: Bool
+    public let latest: String?
+    public let url: String?
+    public let error: String?
+}
+
+/// One entry of `claude-switch backups`.
+public struct BackupInfo: Decodable, Equatable, Sendable {
+    public let name: String
+    public let sessions: Int
+    public let modified: Double
+    public var isUndo: Bool { name.hasPrefix("pre-restore-") }
+}
+
 /// Output of `claude-switch status`.
 public struct Status: Decodable, Equatable, Sendable {
     public let current: String
     public let signedIn: Bool
     public let claudeRunning: Bool
+    public let claudeVersion: String
+    public let versionTested: Bool
+    public let layoutProblems: [String]
+    public let pendingRecovery: Bool
     public let settings: EngineSettings
     public let accounts: [Account]
     public let paused: [PausedSession]

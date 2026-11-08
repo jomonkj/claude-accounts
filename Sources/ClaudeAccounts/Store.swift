@@ -11,13 +11,27 @@ final class Store: ObservableObject {
     @Published var banner: Banner?
     @Published var launchAtLogin = LoginItem.isEnabled
     @Published var showHidden = false
+    @Published var backups: [BackupInfo] = []
+    @Published var update: UpdateInfo?
+    private var lastUpdateCheck = Date.distantPast
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
+    private var windows: [String: NSWindow] = [:]
 
     let engine: EngineClient
+    let notifier = Notifier()
     private var timer: Timer?
 
     init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
         self.engine = engine
         guard startTimer else { return }
+        notifier.onSwitch = { [weak self] id in
+            guard let self, let a = self.account(id) else { return }
+            self.switchTo(a)
+        }
+        notifier.start()
+        if !UserDefaults.standard.bool(forKey: "welcomeDone") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
+        }
         Task { await tick() }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { await self?.tick() }
@@ -28,10 +42,14 @@ final class Store: ObservableObject {
 
     func run(_ args: [String]) async -> EngineResult { await engine.run(args) }
 
+    private var recovering = false
+
     func refresh() async {
         do {
             let s = try await engine.status()
             if s != status { status = s }
+            if s.pendingRecovery && !recovering { await recover() }
+            notifier.update(s)
         } catch let e as EngineError {
             banner = .error(e.message)
         } catch {
@@ -39,9 +57,22 @@ final class Store: ObservableObject {
         }
     }
 
+    /// Finish or roll back a switch that stopped in the middle (for example, the Mac lost power).
+    func recover() async {
+        recovering = true
+        busy = "Repairing an unfinished switch…"
+        let r = await run(["recover"])
+        busy = nil
+        if r.ok, let msg = Status.recoverMessage(r.json) { banner = .warning(msg) }
+        else if !r.ok { banner = .error(r.output) }
+        status = try? await engine.status()
+        recovering = false
+    }
+
     func tick() async {
         _ = await run(["tick"])
         await refresh()
+        if Date().timeIntervalSince(lastUpdateCheck) > 24 * 3600 { await checkForUpdate() }
     }
 
     @discardableResult
@@ -62,6 +93,8 @@ final class Store: ObservableObject {
     var current: Account? { status?.currentAccount }
     func account(_ id: String) -> Account? { status?.account(id) }
     var menuBarTitle: String { status?.menuBarTitle ?? "" }
+    /// Badge count for the menu bar: paused sessions, shown only when notifications are not allowed.
+    var menuBarBadge: Int { notifier.allowed ? 0 : (status?.paused.count ?? 0) }
     var wrongAccountHint: String? { status?.wrongAccountHint }
 
     // MARK: actions
@@ -71,17 +104,21 @@ final class Store: ObservableObject {
             "Claude quits, loads the saved login of this account, and opens again. Your current login is saved first, so you can switch back at any time.\n\nRunning tasks in Claude stop. Finish them first.",
             ok: "Switch") else { return }
         Task {
-            guard let r = await perform("Switching to \(a.title)…", ["switch", a.id]) else { return }
+            guard let r = await perform("Switching to \(a.title)… If Claude asks to confirm the quit, click Quit.", ["switch", a.id]) else { return }
             let shared = r["shared"] as? Int ?? 0
+            let warning = r["warning"] as? String
             busy = "Checking the login…"
             let v = await run(["verify", a.id])
             busy = nil
             await refresh()
             let obj = v.json
             if obj["ok"] as? Bool == true {
-                banner = .success("Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : ""))
+                let text = "Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : "")
+                banner = warning.map { .warning(text + " " + $0) } ?? .success(text)
+                notifier.say("Switched account", text)
             } else {
                 banner = .error(obj["message"] as? String ?? v.output)
+                notifier.say("Login expired", "\(a.title): sign in again in Claude. The app saves the new login.")
             }
         }
     }
@@ -97,16 +134,48 @@ final class Store: ObservableObject {
         }
     }
 
-    func shareNow() {
+    func syncNow() {
         Task {
-            let dry = await run(["share", "--dry-run"])
-            let n = dry.json["count"] as? Int ?? 0
-            guard n > 0 else { banner = .info("This account already has every session."); return }
-            guard Dialog.confirm("Share \(n) sessions into this account?",
-                "A backup is made first. Claude quits, the new or newer sessions of your other accounts are copied into this account, and Claude opens again. Other accounts keep their own sessions.",
-                ok: "Share") else { return }
-            if let r = await perform("Sharing sessions…", ["share"]) {
-                banner = .success("\(r["count"] as? Int ?? 0) sessions are now in this account.")
+            guard let s = status else { return }
+            guard !s.ownedAccounts.isEmpty else {
+                banner = .info("Mark your own accounts first: right-click an account, then Mark as mine.")
+                return
+            }
+            let dry = await run(["sync", "--dry-run"])
+            guard dry.ok, let r = try? JSONDecoder().decode(SyncResult.self, from: Data(dry.output.utf8)) else {
+                banner = .error(dry.output); return
+            }
+            guard r.changes > 0 else { banner = .info("All your accounts already have every session."); return }
+            let lines = s.syncPreview(r).map { "• " + $0 }.joined(separator: "\n")
+            let first = s.settings.syncConfirmed ? "" : "This is your first sync. Check the numbers.\n\n"
+            guard Dialog.confirm("Sync \(r.changes) sessions between your accounts?",
+                first + lines + "\n\nA backup is made first. Claude quits during the sync and opens again. Accounts that are not marked as mine are not touched.",
+                ok: "Sync") else { return }
+            if let out = await perform("Syncing sessions…", ["sync"]) {
+                banner = .success("\(out["changes"] as? Int ?? 0) sessions synced.")
+            }
+        }
+    }
+
+    func setOwned(_ a: Account, _ mine: Bool) {
+        Task { await perform("Saving…", [mine ? "mine" : "not-mine", a.id]) }
+    }
+
+    func restoreBackup() {
+        Task {
+            let r = await run(["backups"])
+            guard r.ok, let data = try? JSONSerialization.data(withJSONObject: r.json["backups"] ?? []),
+                  let list = try? JSONDecoder().decode([BackupInfo].self, from: data), !list.isEmpty else {
+                banner = .info("No backups yet."); return
+            }
+            let titles = list.map { b in
+                (b.isUndo ? "Before restore " + b.name.dropFirst("pre-restore-".count) : b.name) + "  (\(b.sessions) sessions)"
+            }
+            guard let i = Dialog.choose("Restore a backup",
+                "The session lists of all accounts go back to the backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+                titles, ok: "Restore") else { return }
+            if let out = await perform("Restoring…", ["restore", list[i].name]) {
+                banner = .success("Restored \(list[i].name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
             }
         }
     }
@@ -146,6 +215,73 @@ final class Store: ObservableObject {
         Task { await perform("Opening…", ["open-session", p.id]) }
     }
 
+    // MARK: updates
+
+    func checkForUpdate() async {
+        lastUpdateCheck = Date()
+        let r = await run(["update-check", Self.version])
+        update = try? JSONDecoder().decode(UpdateInfo.self, from: Data(r.output.utf8))
+    }
+
+    func installUpdate() {
+        guard let tag = update?.latest else { return }
+        guard Dialog.confirm("Install Claude Accounts \(tag)?",
+            "The app downloads the release, checks its checksum, replaces itself, and opens again. Claude is not touched.",
+            ok: "Install") else { return }
+        Task {
+            if await perform("Downloading \(tag)…", ["update-install", tag]) != nil {
+                busy = "Installing \(tag)…"  // the installer stops this app and opens the new one
+            }
+        }
+    }
+
+    // MARK: windows
+
+    /// Opens (or brings to front) a normal window. The app is a menu bar app, so it must
+    /// activate itself for the window to come to the front.
+    func open<V: View>(_ id: String, title: String, _ view: V) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let w = windows[id] { w.makeKeyAndOrderFront(nil); return }
+        let w = NSWindow(contentViewController: NSHostingController(rootView: view.environmentObject(self)))
+        w.title = title
+        w.styleMask = [.titled, .closable, .miniaturizable]
+        w.isReleasedWhenClosed = false
+        w.center()
+        w.makeKeyAndOrderFront(nil)
+        windows[id] = w
+    }
+
+    func showSettings(tab: String = "general") {
+        windows["settings"]?.close(); windows["settings"] = nil
+        open("settings", title: "Claude Accounts Settings", SettingsView(tab: tab))
+    }
+
+    func showWelcome() {
+        open("welcome", title: "Welcome to Claude Accounts",
+             WelcomeView(close: { [weak self] in self?.windows["welcome"]?.close() }))
+    }
+
+    func finishWelcome() { UserDefaults.standard.set(true, forKey: "welcomeDone") }
+
+    func loadBackups() async {
+        let r = await run(["backups"])
+        guard r.ok, let data = try? JSONSerialization.data(withJSONObject: r.json["backups"] ?? []),
+              let list = try? JSONDecoder().decode([BackupInfo].self, from: data) else { return }
+        backups = list
+    }
+
+    func restore(_ name: String) {
+        guard Dialog.confirm("Restore the backup \(name)?",
+            "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+            ok: "Restore") else { return }
+        Task {
+            if let out = await perform("Restoring…", ["restore", name]) {
+                banner = .success("Restored \(name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
+            }
+            await loadBackups()
+        }
+    }
+
     func openLog() {
         let log = NSHomeDirectory() + "/Library/Application Support/Claude Account Switcher/switch.log"
         NSWorkspace.shared.open(URL(fileURLWithPath: log))
@@ -183,6 +319,18 @@ enum Dialog {
         a.messageText = title; a.informativeText = text
         a.addButton(withTitle: ok); a.addButton(withTitle: "Cancel")
         return a.runModal() == .alertFirstButtonReturn
+    }
+
+    /// A list choice. Returns the chosen index, or nil.
+    static func choose(_ title: String, _ text: String, _ items: [String], ok: String) -> Int? {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = title; a.informativeText = text
+        let pop = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 300, height: 26), pullsDown: false)
+        pop.addItems(withTitles: items)
+        a.accessoryView = pop
+        a.addButton(withTitle: ok); a.addButton(withTitle: "Cancel")
+        return a.runModal() == .alertFirstButtonReturn ? pop.indexOfSelectedItem : nil
     }
 
     static func ask(_ title: String, _ text: String, value: String) -> String? {

@@ -6,19 +6,35 @@ A macOS menu bar app that switches the **Claude desktop app** between accounts w
 
 - **One-click switch.** The app saves the login of each account. A switch quits Claude, saves the current login, loads the target login, and opens Claude again. Then it checks that the login works.
 - **Automatic login save.** Every 5 minutes, the app saves the login that Claude uses now. If you sign out inside Claude, the login is not lost.
-- **Share sessions.** Copies new or newer sessions from all accounts into the current account. Conversation transcripts are stored in one place (`~/.claude/projects`), so every account opens the same conversation. You can share on every switch or one time with **Share now**.
-- **Stopped on usage limit.** Lists sessions that stopped on the 5-hour limit, with the reset time. **Open** opens the session in Claude.
+- **Two-way session sync between your own accounts.** Mark your accounts as "mine" (right-click → **Mark as mine**). **Sync now** shows a preview, makes a backup, and gives every "mine" account the newest copy of every session. Accounts that are not "mine" are never read or written. Conversation transcripts are stored in one place (`~/.claude/projects`), so every account opens the same conversation. You can also turn on sync on every switch.
+- **Stopped on usage limit.** Lists sessions that stopped on the 5-hour limit, with the reset time. **Open** opens the session in Claude. A notification appears one time for each stopped session, with **Switch to …** buttons for your other "mine" accounts and **Open session**. The app never switches by itself; a button click still shows the normal confirmation. If macOS does not allow notifications for the app, the menu bar icon shows a red count instead.
 - **Wrong-account warning.** Shows a warning when the active account has few sessions and another account has many.
-- **Backups.** A daily copy of all session lists goes to `~/Backups/claude-sessions`, and the app keeps the last N days. Share always makes a backup first.
+- **Backups and restore.** A daily copy of all session lists goes to `~/Backups/claude-sessions`, and the app keeps the last N days. Sync always makes a backup first. **Backups → Restore a backup…** restores any backup, and before that it saves the current state, so a restore can be undone.
+- **Settings window** (⌘, in the panel), with these tabs: General, Accounts (one table with sessions, login, Mine and Show for each account), Sync, Backups (list and restore), and Advanced (Claude version, layout check, recover, files).
+- **First-run guide.** Three pages: what the app does, mark your accounts and add missing logins, then sync and open-at-login. Open it again from Settings → General.
 - **Upkeep.** Rename an account, hide it, or forget its saved login. You can show the account name in the menu bar, and the app can open at login.
 
 ## Install
+
+**Teammates** (needs the GitHub CLI, signed in with access to this repo):
+
+```bash
+gh release download --repo jomonkj/claude-accounts --pattern install-release.sh --output - | bash
+```
+
+The script downloads the latest release, checks its sha256, installs the app to `~/Applications`, removes the quarantine flag, links the CLI into `~/.local/bin`, adds the login item, and opens the app.
+
+If you do not use Terminal: download `Claude-Accounts-<version>.zip` from the Releases page, unzip it, and move the app to Applications. The app is not notarized, so the first time, **right-click it → Open → Open**.
+
+**Updates:** the app checks GitHub Releases once a day through `gh`. When a new version exists, the panel shows **Update**.
+
+**From source** (needs the Xcode Command Line Tools and macOS 14 or later):
 
 ```bash
 scripts/install.sh
 ```
 
-The script runs the tests, builds the app, copies it to `~/Applications`, links the CLI into `~/.local/bin`, adds a login item, and opens the app. It needs the Xcode Command Line Tools (`swiftc`) and macOS 14 or later.
+This runs all tests, builds for this Mac, and installs the build in the same way.
 
 ## First use
 
@@ -32,7 +48,9 @@ The script runs the tests, builds the app, copies it to `~/Applications`, links 
 claude-accounts                 # table of accounts
 claude-switch status            # JSON
 claude-switch switch 6bd8db16   # switch (full or 8-character account ID)
-claude-switch share --dry-run
+claude-switch mine 6bd8db16                         # mark as yours
+claude-switch sync --dry-run                        # preview
+claude-switch backups; claude-switch restore 2026-11-08
 claude-switch label 6bd8db16 "me@example.com"
 ```
 
@@ -54,6 +72,34 @@ Session lists are stored per account in `claude-code-sessions/<account>/<org>/lo
 
 Before every switch, the exact state goes to `.../Claude Account Switcher/last-state`, so you can restore it by hand. Every action is written to `switch.log` in the same folder.
 
+### Crash safety
+
+A switch writes its progress to `journal.json` before each step that changes files: `started → saved → loaded → synced`. If the engine stops in the middle (for example, the Mac loses power), `claude-switch recover` reads the journal:
+
+| Stopped after | Recover does |
+|---|---|
+| `started` | nothing; no file was changed |
+| `saved` (or during the load) | rolls back to `last-state` |
+| `loaded`, `synced` | finishes the switch; the target login is complete |
+
+The app runs `recover` by itself when it starts. While a journal exists, every other change is refused, and the automatic login save does not run. `tests/crash_test.sh` stops the engine after each step and checks the result (45 checks).
+
+### Sync rules
+
+Sync uses only the accounts marked as "mine":
+
+1. For each session, the copy with the newest modification time goes to every "mine" account that has an older copy or no copy.
+2. A session that is deleted in any "mine" account (Claude writes a `deleted_<id>` file) is not added to accounts that do not have it.
+3. Sync never deletes a file.
+4. Accounts that are not "mine" are not read and not written.
+5. A second sync changes nothing.
+
+`tests/sync_property_test.py` checks these rules on 500 random stores, with 3–5 accounts, some folders missing, some deleted markers, and random times. Three deliberately broken versions of the sync (ignore deleted markers, oldest wins, sync every account) each fail it. On a copy of the real data (2,897 session files, 839 changes), sync takes 0.6 s; the first backup of a day adds about 6 s.
+
+### Version and layout guard
+
+Before a switch, the engine checks that the Claude data folder still has the layout it knows: `config.json`, a `Cookies` database with a `cookies(host_key, name)` table, the session folder, and an account ID next to the token. If any check fails, the switch stops and changes nothing; `--force` overrides this. A Claude version that is not in the tested list, but has the known layout, may switch with a warning; after the first successful `verify`, that version counts as tested.
+
 ## Limits
 
 - The app switches only the Claude desktop app. The `claude` CLI in a terminal has its own login.
@@ -66,10 +112,15 @@ Before every switch, the exact state goes to `.../Claude Account Switcher/last-s
 
 ```bash
 tests/engine_test.sh                                # engine tests in a fake app folder
+tests/crash_test.sh                                 # kill the engine at each switch step, then recover
+tests/sync_property_test.py [cases]                 # sync rules on random stores (default 500)
+tests/install_test.sh                               # installer in a fake HOME (needs a build)
 swift run CoreTests                                 # app logic tests (no Xcode needed)
 scripts/build.sh                                    # universal build into ./build
 ARCHS=arm64 scripts/build.sh                        # faster, one architecture
 build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render /tmp/panel.png [dark]
+build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render-settings accounts /tmp/settings.png
+build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render-welcome 1 /tmp/welcome.png
 ```
 
 The `--render` option draws the panel to a PNG file, so you can check the layout without the menu bar.

@@ -7,10 +7,15 @@ signing in again, and can share sessions across accounts.
 Commands (all print JSON unless noted):
   status                      accounts, saved logins, paused sessions, settings
   list                        human-readable table (default for `claude-accounts`)
-  switch <account>            quit Claude, save this login, load <account>, open Claude
+  switch <account> [--force]  quit Claude, save this login, load <account>, open Claude
   verify <account>            wait until Claude runs signed in as <account>
-  add                         quit Claude, save this login, open Claude signed out
-  share [--dry-run]           copy missing or newer sessions into the current account
+  add [--force]               quit Claude, save this login, open Claude signed out
+  recover                     finish or roll back a switch that stopped in the middle
+  sync [--dry-run]            two-way sync of session lists between "mine" accounts
+  share [--dry-run]           old name for sync
+  mine|not-mine <account>     mark an account as yours (sync uses only these)
+  backups                     list backups
+  restore <name>              restore a backup (the current state is backed up first)
   tick                        periodic job: auto-save login, daily backup
   backup                      copy all session lists to ~/Backups/claude-sessions
   label [<account>] <name>    name an account (no account = current one)
@@ -18,10 +23,12 @@ Commands (all print JSON unless noted):
   hide|unhide <account>       hide an account from the list
   set <key> <value>           change a setting (true/false or a number)
   open-session <session-id>   open a session in Claude
+  update-check <version>      is a newer GitHub Release out? (uses gh)
+  update-install <tag>        download, check and install a release, then reopen the app
 
 <account> is a full account UUID or its first 8 characters.
 """
-import contextlib, datetime, fcntl, glob, json, os, re, shutil, sqlite3, subprocess, sys, time
+import contextlib, datetime, fcntl, glob, json, os, plistlib, re, shutil, sqlite3, subprocess, sys, time
 
 HOME = os.path.expanduser("~")
 APP = os.environ.get("CLAUDE_APP_DIR", f"{HOME}/Library/Application Support/Claude")
@@ -30,18 +37,28 @@ BASE = os.environ.get("CLAUDE_SWITCH_HOME", f"{HOME}/Library/Application Support
 PROFILES = os.path.join(BASE, "profiles")
 SETTINGS = os.path.join(BASE, "settings.json")
 LOG = os.path.join(BASE, "switch.log")
+JOURNAL = os.path.join(BASE, "journal.json")
+LAST_STATE = os.path.join(BASE, "last-state")
+INFO_PLIST = os.environ.get("CLAUDE_INFO_PLIST", "/Applications/Claude.app/Contents/Info.plist")
+# Claude versions on which a full switch was checked by hand. Versions that pass `verify`
+# are added to settings["verifiedVersions"] automatically.
+TESTED_VERSIONS = ["4.23118.0"]
 BACKUPS = os.environ.get("CLAUDE_SWITCH_BACKUPS", f"{HOME}/Backups/claude-sessions")
 OLD_LABELS = f"{HOME}/.claude/account-labels.txt"
 CLI_JSON = f"{HOME}/.claude.json"
 TEST = bool(os.environ.get("CLAUDE_SWITCH_TEST"))
 CLAUDE_BIN = "/Applications/Claude.app/Contents/MacOS/Claude"
 BUNDLE_ID = "com.anthropic.claudefordesktop"
+REPO = os.environ.get("CLAUDE_ACCOUNTS_REPO", "jomonkj/claude-accounts")
+GH = os.environ.get("CLAUDE_SWITCH_GH") or shutil.which("gh", path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin") or "gh"
 
 LOGIN_FILES = ["Cookies", "Cookies-journal"]
 LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
 CONFIG_KEYS = ["oauth:tokenCacheV2", "lastKnownAccountUuid"]
-DEFAULTS = {"shareSessions": False, "autoSaveLogins": True, "dailyBackup": True,
-            "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {}}
+DEFAULTS = {"syncOnSwitch": False, "autoSaveLogins": True, "dailyBackup": True,
+            "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {},
+            "owned": [], "syncConfirmed": False}
+LIST_KEYS = ("hidden", "labels", "owned")
 
 os.umask(0o077)
 os.makedirs(PROFILES, exist_ok=True)
@@ -81,6 +98,11 @@ def write_json(path, data):
 def settings():
     s = dict(DEFAULTS)
     s.update(read_json(SETTINGS, {}) or {})
+    if "shareSessions" in s:  # renamed in v1.0
+        s.setdefault("syncOnSwitch", s["shareSessions"])
+        if s.pop("shareSessions"):
+            s["syncOnSwitch"] = True
+    s["owned"] = list(s.get("owned") or [])
     s["labels"] = dict(s.get("labels") or {})
     s["hidden"] = list(s.get("hidden") or [])
     if os.path.exists(OLD_LABELS) and not s.get("importedV1Labels"):  # names from version 1
@@ -111,6 +133,17 @@ def lock():
         f.close()
 
 
+def lock_held():
+    """True while another engine process holds the lock (a switch is running now)."""
+    try:
+        with open(os.path.join(BASE, "lock"), "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(f, fcntl.LOCK_UN)
+        return False
+    except BlockingIOError:
+        return True
+
+
 def account_dirs():
     """{account: [org folders]} from the session store."""
     out = {}
@@ -137,6 +170,97 @@ def resolve(acc):
     return m[0]
 
 
+# ---------- journal (crash safety) ----------
+#
+# A switch writes its progress to journal.json before each step that changes files:
+#   started -> saved -> loaded -> synced -> (journal deleted)
+# `recover` reads it: before "saved" nothing changed; at "saved" the target login may be
+# half loaded, so it rolls back to last-state; at "loaded"/"synced" the target is complete.
+
+def crash_point(name):
+    """Test hook: CLAUDE_SWITCH_CRASH_AFTER=<name> kills the engine here, like kill -9."""
+    if os.environ.get("CLAUDE_SWITCH_CRASH_AFTER") == name:
+        os._exit(137)
+
+
+def checkpoint(step, **extra):
+    j = read_json(JOURNAL, {}) or {}
+    j.update(extra)
+    j["step"], j["at"] = step, time.time()
+    write_json(JOURNAL, j)
+    log(f"journal: {j.get('op')} {step}")
+    crash_point(step)
+
+
+def pending():
+    return read_json(JOURNAL)
+
+
+def require_no_pending():
+    if pending():
+        raise Fail("A switch stopped in the middle. Run recover first. The app does this by itself when it starts.")
+
+
+def end_journal():
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(JOURNAL)
+
+
+# ---------- version and layout guard ----------
+
+def claude_version():
+    try:
+        with open(INFO_PLIST, "rb") as f:
+            return plistlib.load(f).get("CFBundleShortVersionString", "")
+    except (OSError, plistlib.InvalidFileException, ValueError):
+        return ""
+
+
+def tested_versions(s=None):
+    return sorted(set(TESTED_VERSIONS) | set((s or settings()).get("verifiedVersions") or []))
+
+
+def layout_problems():
+    """Ways in which the Claude data folder differs from the layout this engine knows."""
+    probs = []
+    cfg = read_json(os.path.join(APP, "config.json"))
+    if not isinstance(cfg, dict):
+        return ["config.json is missing or is not JSON"]
+    if not os.path.isdir(SESS):
+        probs.append("the claude-code-sessions folder is missing")
+    signed_in = bool(cfg.get("oauth:tokenCacheV2"))
+    if signed_in and not cfg.get("lastKnownAccountUuid"):
+        probs.append("config.json has a token but no lastKnownAccountUuid")
+    cookies = os.path.join(APP, "Cookies")
+    if os.path.exists(cookies):
+        try:
+            con = sqlite3.connect(f"file:{cookies}?immutable=1", uri=True)
+            cols = {r[1] for r in con.execute("pragma table_info(cookies)")}
+            con.close()
+            if not {"host_key", "name"} <= cols:
+                probs.append("the Cookies database has no cookies(host_key, name) table")
+        except sqlite3.Error:
+            probs.append("the Cookies file is not a database")
+    elif signed_in:
+        probs.append("Claude is signed in but has no Cookies file")
+    return probs
+
+
+def guard(force):
+    """Stop before any change if the login layout is unknown. Returns (version, warning)."""
+    v = claude_version()
+    probs = layout_problems()
+    if probs and not force:
+        raise Fail(f"Claude {v or '(unknown version)'} stores its login in a way this app does not know: "
+                   + "; ".join(probs) + ". Nothing was changed. Update Claude Accounts, or use --force at your own risk.")
+    warn = None
+    if v not in tested_versions():
+        warn = f"Claude {v or '(unknown version)'} is not tested yet. Its login layout looks the same, so the switch ran."
+    if probs:
+        warn = "Forced switch on an unknown layout: " + "; ".join(probs)
+    return v, warn
+
+
 # ---------- Claude app state ----------
 
 def current_account():
@@ -150,16 +274,33 @@ def claude_running():
     return CLAUDE_BIN in out.splitlines()
 
 
+QUIT_WAIT = 90  # seconds; Claude may ask the user to confirm the quit
+
+
 def quit_claude():
+    if TEST and os.environ.get("CLAUDE_SWITCH_QUIT_FAIL"):
+        raise Fail("Claude did not quit (test).")
     if TEST or not claude_running():
         return
     subprocess.run(["osascript", "-e", f'tell application id "{BUNDLE_ID}" to quit'], capture_output=True)
-    for _ in range(60):
+    for _ in range(QUIT_WAIT * 2):
         if not claude_running():
             time.sleep(1)
             return
         time.sleep(0.5)
-    raise Fail("Claude did not quit. A dialog may be open in Claude. Quit it by hand, then try again.")
+    raise Fail(f"Claude did not quit within {QUIT_WAIT} seconds. Claude may be asking you to confirm the quit, "
+               "or a task is still running in it (for example, a command started from Claude itself). "
+               "Answer Claude's dialog or finish the task, then switch again. Nothing was changed.")
+
+
+def quit_or_cancel():
+    """Quit Claude. If that fails, no file has changed yet, so remove the journal and stop."""
+    try:
+        quit_claude()
+    except Fail:
+        end_journal()
+        log("cancelled before any change: Claude did not quit")
+        raise
 
 
 def open_claude(url=None):
@@ -224,6 +365,7 @@ def load_login(src):
             os.remove(os.path.join(APP, f))
     for d in LOGIN_DIRS:
         shutil.rmtree(os.path.join(APP, d), ignore_errors=True)
+    crash_point("mid-load")
     keys = {}
     if src:
         for f in LOGIN_FILES:
@@ -253,34 +395,68 @@ def save_current(mode="switch"):
     else:
         log(f"no login to save (current={cur or '-'})")
     if mode == "switch":  # exact copy of the state before a change, for recovery
-        save_login(os.path.join(BASE, "last-state"), "switch")
+        save_login(LAST_STATE, "switch")
 
 
 # ---------- sessions ----------
 
-def share_into(acc, dry=False):
-    """Copy sessions that are missing or older in `acc`. Returns the count."""
+def session_index(acc, dirs):
+    """Session files of one account: ({file name: [paths]}, {deleted session ids})."""
+    files, deleted = {}, set()
+    for d in dirs.get(acc, []):
+        for name in os.listdir(d):
+            if name.startswith("local_") and name.endswith(".json"):
+                files.setdefault(name, []).append(os.path.join(d, name))
+            elif name.startswith("deleted_"):
+                deleted.add(name[len("deleted_"):])
+    return files, deleted
+
+
+def owned(s=None):
+    return set((s or settings())["owned"])
+
+
+def sync_sessions(dry=False):
+    """Two-way sync of session list files between "mine" accounts.
+
+    Rules: the newest copy of a session (by modification time) goes to every "mine" account
+    that has an older copy or none; a session deleted in any "mine" account is not copied
+    to accounts that do not have it; nothing is ever deleted; accounts that are not "mine"
+    are not read and not written.
+    """
     dirs = account_dirs()
-    if not dirs.get(acc):
-        if dry:
-            return 0
-        raise Fail("This account has no session folder yet. Start one session in Claude, then share again.")
-    target = max(dirs[acc], key=os.path.getmtime)
-    n = 0
-    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
-        if f.startswith(os.path.join(SESS, acc) + os.sep):
-            continue
-        base = os.path.basename(f)
-        dst = os.path.join(target, base)
-        if os.path.exists(os.path.join(target, "deleted_" + base[len("local_"):-len(".json")])):
-            continue
-        if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(f) - 1:
-            continue
-        n += 1
-        if not dry:
-            shutil.copy2(f, dst)
-    log(f"share into {acc}: {n} sessions{' (dry run)' if dry else ''}")
-    return n
+    members = sorted(a for a in owned() if dirs.get(a))
+    skipped = sorted(a for a in owned() if not dirs.get(a))
+    idx = {a: session_index(a, dirs) for a in members}
+    deleted = set().union(*(idx[a][1] for a in members)) if members else set()
+    newest = {}
+    for a in members:
+        for name, paths in idx[a][0].items():
+            for p in paths:
+                m = os.path.getmtime(p)
+                if name not in newest or m > newest[name][0]:
+                    newest[name] = (m, p)
+    changes = {}
+    for a in members:
+        target = max(dirs[a])  # stable choice of org folder for new files
+        if len(dirs[a]) > 1:
+            target = max(dirs[a], key=lambda d: (len(os.listdir(d)), d))
+        have, n = idx[a][0], 0
+        for name, (m, src) in newest.items():
+            if name in have:
+                for p in have[name]:
+                    if p != src and os.path.getmtime(p) < m - 1:
+                        n += 1
+                        if not dry:
+                            shutil.copy2(src, p)
+            elif name[len("local_"):-len(".json")] not in deleted:
+                n += 1
+                if not dry:
+                    shutil.copy2(src, os.path.join(target, name))
+        changes[a] = n
+    total = sum(changes.values())
+    log(f"sync: {total} changes in {sum(1 for v in changes.values() if v)} accounts{' (dry run)' if dry else ''}")
+    return {"changes": total, "accounts": changes, "skipped": skipped, "dryRun": dry}
 
 
 def transcript_tail(cli_id, size=65536):
@@ -328,6 +504,37 @@ def paused_sessions(days=3):
     return out
 
 
+def list_backups():
+    if not os.path.isdir(BACKUPS):
+        return []
+    out = []
+    for d in sorted(os.listdir(BACKUPS), reverse=True):
+        p = os.path.join(BACKUPS, d)
+        if os.path.isdir(p) and (re.fullmatch(r"\d{4}-\d\d-\d\d", d) or d.startswith("pre-restore-")):
+            n = sum(1 for _ in glob.glob(os.path.join(p, "*", "*", "local_*.json")))
+            out.append({"name": d, "sessions": n, "modified": os.path.getmtime(p)})
+    return out
+
+
+def restore(name):
+    require_no_pending()
+    if name not in {b["name"] for b in list_backups()}:
+        raise Fail(f"No backup named {name}.")
+    with lock():
+        running = claude_running()
+        quit_claude()
+        undo = f"pre-restore-{datetime.datetime.now():%Y%m%d-%H%M%S}"
+        subprocess.run(["rsync", "-a", SESS + "/", os.path.join(BACKUPS, undo) + "/"], check=True)
+        subprocess.run(["rsync", "-a", "--delete", os.path.join(BACKUPS, name) + "/", SESS + "/"], check=True)
+        pre = sorted(d for d in os.listdir(BACKUPS) if d.startswith("pre-restore-"))
+        for old in pre[:-3]:
+            shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
+        if running:
+            open_claude()
+    log(f"restored backup {name} (undo: {undo})")
+    return {"ok": True, "restored": name, "undo": undo}
+
+
 def backup(keep):
     os.makedirs(BACKUPS, exist_ok=True)
     dest = os.path.join(BACKUPS, f"{datetime.date.today():%Y-%m-%d}")
@@ -341,13 +548,23 @@ def backup(keep):
 
 # ---------- commands ----------
 
+def cli_emails():
+    """Account emails known to the claude CLI: ~/.claude.json and ~/.claude-*/.claude.json
+    (one per CLAUDE_CONFIG_DIR, for example the claude-b launcher)."""
+    out = {}
+    for path in [CLI_JSON] + sorted(glob.glob(f"{HOME}/.claude-*/.claude.json")):
+        o = (read_json(path, {}) or {}).get("oauthAccount") or {}
+        if o.get("accountUuid") and o.get("emailAddress"):
+            out.setdefault(o["accountUuid"], o["emailAddress"])
+    return out
+
+
 def status():
     s = settings()
     cur = current_account()
-    cli = (read_json(CLI_JSON, {}) or {}).get("oauthAccount") or {}
     labels = dict(s["labels"])
-    if cli.get("accountUuid") and cli.get("emailAddress"):
-        labels.setdefault(cli["accountUuid"], cli["emailAddress"])
+    for acc, email in cli_emails().items():
+        labels.setdefault(acc, email)
     dirs = account_dirs()
     accounts = []
     for a in known_accounts():
@@ -358,11 +575,17 @@ def status():
             "lastUsed": max((os.path.getmtime(f) for f in files), default=0),
             "savedLogin": meta is not None, "savedAt": (meta or {}).get("savedAt", 0),
             "savedMode": (meta or {}).get("mode", ""),
-            "current": a == cur, "hidden": a in s["hidden"],
+            "current": a == cur, "hidden": a in s["hidden"], "owned": a in s["owned"],
         })
     accounts.sort(key=lambda x: (not x["current"], -x["sessions"], -x["lastUsed"], x["id"]))
+    v = claude_version()
+    running = lock_held()
     return {"current": cur, "signedIn": has_login(), "claudeRunning": claude_running(),
-            "settings": {k: v for k, v in s.items() if k not in ("labels", "importedV1Labels")},
+            "claudeVersion": v, "versionTested": v in tested_versions(s),
+            "layoutProblems": layout_problems(),
+            # A journal while the lock is held is a switch in progress, not one to repair.
+            "switchRunning": running, "pendingRecovery": pending() is not None and not running,
+            "settings": {k: val for k, val in s.items() if k not in ("labels", "importedV1Labels", "verifiedVersions", "owned")},
             "accounts": accounts, "paused": paused_sessions()}
 
 
@@ -380,19 +603,33 @@ def cmd_list():
             print(f"  - {p['title']}  (resets {p['resets'] or '?'})")
 
 
-def switch(target):
+def switch(target, force=False):
     target = resolve(target)
+    require_no_pending()
     if not profile_meta(target):
         raise Fail("No saved login for this account. Click Add account and sign in with it one time.")
+    version, warn = guard(force)
     with lock():
         log(f"switch to {target}")
-        quit_claude()
+        checkpoint("started", op="switch", target=target, source=current_account(), version=version)
+        quit_or_cancel()
         save_current("switch")
+        checkpoint("saved")
         load_login(os.path.join(PROFILES, target))
-        shared = share_into(target) if settings()["shareSessions"] and account_dirs().get(target) else 0
+        checkpoint("loaded")
+        shared = 0
+        s = settings()
+        if s["syncOnSwitch"] and target in s["owned"] and s["syncConfirmed"]:
+            backup(s["backupKeep"])
+            shared = sync_sessions()["changes"]
+        checkpoint("synced")
         open_claude()
+        end_journal()
     log(f"switched to {target}")
-    return {"ok": True, "account": target, "shared": shared}
+    out = {"ok": True, "account": target, "shared": shared}
+    if warn:
+        out["warning"] = warn
+    return out
 
 
 def verify(target, timeout=45):
@@ -400,40 +637,87 @@ def verify(target, timeout=45):
     end = time.time() + timeout
     while time.time() < end:
         if claude_running() and current_account() == target and has_login():
-            time.sleep(8)  # Claude drops a bad login a few seconds after start
+            time.sleep(0 if TEST else 8)  # Claude drops a bad login a few seconds after start
             if current_account() == target and has_login():
-                return {"ok": True}
-        time.sleep(2)
+                return remember_version()
+        time.sleep(0.1 if TEST else 2)
     if current_account() == target and has_login():
-        return {"ok": True}
+        return remember_version()
     log(f"verify failed for {target}")
+    if current_account() != target:
+        return {"ok": False, "message": "Claude is not on this account. The switch did not finish."}
     return {"ok": False, "message": "Claude did not stay signed in. The saved login may have expired. Sign in again in Claude; the app saves the new login."}
 
 
-def add():
-    with lock():
-        log("add account")
-        quit_claude()
-        save_current("switch")
-        load_login(None)
-        open_claude()
+def remember_version():
+    """A switch worked on this Claude version, so mark the version as tested."""
+    v = claude_version()
+    s = settings()
+    if v and v not in tested_versions(s):
+        s["verifiedVersions"] = sorted(set(s.get("verifiedVersions") or []) | {v})
+        save_settings(s)
+        log(f"Claude {v} added to tested versions")
     return {"ok": True}
 
 
-def share(dry):
-    cur = current_account()
-    if not cur:
-        raise Fail("Not signed in.")
+def add(force=False):
+    require_no_pending()
+    version, warn = guard(force)
+    with lock():
+        log("add account")
+        checkpoint("started", op="add", target=None, source=current_account(), version=version)
+        quit_or_cancel()
+        save_current("switch")
+        checkpoint("saved")
+        load_login(None)
+        checkpoint("loaded")
+        open_claude()
+        end_journal()
+    return {"ok": True, **({"warning": warn} if warn else {})}
+
+
+def recover():
+    j = pending()
+    if not j:
+        return {"ok": True, "recovered": False}
+    if lock_held():
+        return {"ok": True, "recovered": False, "running": True}  # the switch is still going
+    with lock():
+        step = j.get("step")
+        if step in ("loaded", "synced"):
+            action = "finished"            # the target login is complete
+        elif step == "saved" and os.path.isdir(LAST_STATE):
+            load_login(LAST_STATE)         # the target login may be half loaded
+            action = "rolled back"
+        else:
+            action = "nothing to undo"     # no file was changed yet
+        open_claude()
+        end_journal()
+    log(f"recover: {action} ({j.get('op')} to {j.get('target')}, stopped after {step})")
+    return {"ok": True, "recovered": True, "action": action, "step": step,
+            "op": j.get("op"), "target": j.get("target")}
+
+
+def sync_cmd(dry):
+    if not owned():
+        raise Fail("No account is marked as mine. Mark your own accounts first.")
     if dry:
-        return {"count": share_into(cur, dry=True)}
+        return sync_sessions(dry=True)
+    require_no_pending()
     with lock():
         backup(settings()["backupKeep"])
-        quit_claude()
+        running = claude_running()
+        quit_claude()  # Claude may write the same files while it runs
         try:
-            n = share_into(cur)
+            out = sync_sessions()
         finally:
-            open_claude()
-    return {"count": n}
+            if running:
+                open_claude()
+    s = settings()
+    if not s["syncConfirmed"]:
+        s["syncConfirmed"] = True
+        save_settings(s)
+    return out
 
 
 def tick():
@@ -441,6 +725,8 @@ def tick():
     done = []
     try:
         with lock():
+            if pending():
+                return {"done": []}  # never save a half-switched login
             cur = current_account()
             if s["autoSaveLogins"] and cur and claude_running() and has_login():
                 meta = profile_meta(cur)
@@ -457,6 +743,49 @@ def tick():
     return {"done": done}
 
 
+def version_tuple(v):
+    nums = re.findall(r"\d+", (v or "").split("-")[0])
+    return tuple(int(n) for n in nums[:3]) + (0,) * (3 - len(nums[:3]))
+
+
+def update_check(current):
+    """Latest release vs. the running version. Never fails: problems come back as `error`."""
+    try:
+        r = subprocess.run([GH, "release", "view", "--repo", REPO, "--json", "tagName,url,publishedAt"],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"available": False, "error": f"gh is not available: {e}"}
+    if r.returncode != 0:
+        msg = (r.stderr or r.stdout).strip().splitlines()
+        return {"available": False, "error": msg[-1] if msg else "gh failed"}
+    rel = json.loads(r.stdout)
+    latest = rel.get("tagName", "")
+    newer = version_tuple(latest) > version_tuple(current)
+    return {"available": newer, "latest": latest, "current": current, "url": rel.get("url", "")}
+
+
+def update_install(tag):
+    """Download and install a release with the release's own install script, then reopen."""
+    if not re.fullmatch(r"v\d+\.\d+\.\d+(-[\w.]+)?", tag or ""):
+        raise Fail(f"Not a release tag: {tag}")
+    work = os.path.join(BASE, "update")
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(work)
+    r = subprocess.run([GH, "release", "download", tag, "--repo", REPO, "--pattern", "install-release.sh",
+                        "--dir", work], capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        raise Fail("Cannot download the release: " + (r.stderr or r.stdout).strip())
+    script = os.path.join(work, "install-release.sh")
+    log(f"update to {tag}")
+    if TEST:
+        return {"ok": True, "tag": tag, "script": script}
+    # Run detached: the installer stops this app, replaces it, and opens the new version.
+    subprocess.Popen(["/bin/bash", script, "--tag", tag], stdout=open(os.path.join(work, "install.log"), "w"),
+                     stderr=subprocess.STDOUT, start_new_session=True,
+                     env={**os.environ, "PATH": f"{os.path.dirname(GH)}:/usr/bin:/bin:/usr/sbin:/sbin"})
+    return {"ok": True, "tag": tag}
+
+
 def main(argv):
     cmd, args = (argv[1] if len(argv) > 1 else "status"), argv[2:]
     if os.path.basename(argv[0]) == "claude-accounts" and len(argv) == 1:
@@ -467,13 +796,24 @@ def main(argv):
     elif cmd == "list":
         return cmd_list()
     elif cmd == "switch":
-        out = switch(args[0] if args else "")
+        rest = [a for a in args if a != "--force"]
+        out = switch(rest[0] if rest else "", force="--force" in args)
     elif cmd == "verify":
         out = verify(args[0] if args else "")
     elif cmd == "add":
-        out = add()
-    elif cmd == "share":
-        out = share("--dry-run" in args)
+        out = add(force="--force" in args)
+    elif cmd == "recover":
+        out = recover()
+    elif cmd in ("sync", "share"):
+        out = sync_cmd("--dry-run" in args)
+    elif cmd in ("mine", "not-mine"):
+        acc = resolve(args[0] if args else "")
+        o = set(s["owned"]); (o.add if cmd == "mine" else o.discard)(acc)
+        s["owned"] = sorted(o); save_settings(s); out = {"ok": True}
+    elif cmd == "backups":
+        out = {"backups": list_backups()}
+    elif cmd == "restore":
+        out = restore(args[0] if args else "")
     elif cmd == "tick":
         out = tick()
     elif cmd == "backup":
@@ -494,11 +834,15 @@ def main(argv):
         h = set(s["hidden"]); (h.add if cmd == "hide" else h.discard)(acc)
         s["hidden"] = sorted(h); save_settings(s); out = {"ok": True}
     elif cmd == "set":
-        if len(args) != 2 or args[0] not in DEFAULTS or args[0] in ("hidden", "labels"):
-            raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in ("hidden", "labels")) + "> <value>")
+        if len(args) != 2 or args[0] not in DEFAULTS or args[0] in LIST_KEYS:
+            raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in LIST_KEYS) + "> <value>")
         v = args[1].lower()
         s[args[0]] = v in ("1", "true", "on", "yes") if isinstance(DEFAULTS[args[0]], bool) else int(v)
         save_settings(s); out = {"ok": True}
+    elif cmd == "update-check":
+        out = update_check(args[0] if args else "0.0.0")
+    elif cmd == "update-install":
+        out = update_install(args[0] if args else "")
     elif cmd == "open-session":
         open_claude(f"claude://claude.ai/epitaxy/{args[0]}"); out = {"ok": True}
     else:

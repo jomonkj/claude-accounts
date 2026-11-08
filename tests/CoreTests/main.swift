@@ -46,6 +46,37 @@ func main() async {
     check("all paused are new on first status", s.newlyPaused(since: nil).map(\.id) == ["local_p1"])
     check("paused not new the second time", s.newlyPaused(since: s).isEmpty)
 
+    check("no guard banner for a tested version", s.guardBanner == nil)
+    let untested = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"versionTested\": true", with: "\"versionTested\": false").utf8))
+    if case .info(let t)? = untested.guardBanner { check("info banner for an untested version", t.contains("not tested yet")) }
+    else { check("info banner for an untested version", false) }
+    let broken = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"layoutProblems\": []", with: "\"layoutProblems\": [\"no Cookies\"]").utf8))
+    if case .error(let t)? = broken.guardBanner { check("error banner for an unknown layout", t.contains("no Cookies")) }
+    else { check("error banner for an unknown layout", false) }
+    check("recover message: rolled back", Status.recoverMessage(["recovered": true, "action": "rolled back", "step": "saved"])?.contains("previous login is back") == true)
+    check("recover message: finished", Status.recoverMessage(["recovered": true, "action": "finished", "step": "loaded"])?.contains("now finished") == true)
+    check("recover message: nothing", Status.recoverMessage(["recovered": false]) == nil)
+
+    check("owned accounts", s.ownedAccounts.map(\.id) == [A, B])
+    let preview = try! JSONDecoder().decode(SyncResult.self, from: Data(
+        #"{"changes": 20, "accounts": {"\#(A)": 4, "\#(B)": 16, "zzzz9999": 0}, "skipped": [], "dryRun": true}"#.utf8))
+    check("sync preview: biggest first, names, no zero lines",
+          s.syncPreview(preview) == ["jomon@example.com (Team): 16 sessions", "Account aaaa1111: 4 sessions"])
+    let backups = try! JSONDecoder().decode([BackupInfo].self, from: Data(
+        #"[{"name": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "sessions": 9, "modified": 2}]"#.utf8))
+    check("undo backup is marked", backups.map(\.isUndo) == [false, true])
+
+    check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
+    check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)
+    check("switch targets: mine, saved, not current", s.switchTargets().map(\.id) == [B])
+    let note = s.notificationText(for: s.paused[0])
+    check("notification text", note.title == "Usage limit reached"
+          && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")
