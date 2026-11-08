@@ -19,8 +19,9 @@ struct ClaudeAccountsApp: App {
             MenuView().environmentObject(store)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "person.2.circle")
-                if !store.menuBarTitle.isEmpty { Text(store.menuBarTitle) }
+                Image(systemName: store.menuBarBadge > 0 ? "exclamationmark.circle.fill" : "person.2.circle")
+                if store.menuBarBadge > 0 { Text("\(store.menuBarBadge)") }
+                else if !store.menuBarTitle.isEmpty { Text(store.menuBarTitle) }
             }
         }
         .menuBarExtraStyle(.window)

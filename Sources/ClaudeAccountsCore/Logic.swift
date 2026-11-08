@@ -61,6 +61,23 @@ public extension Status {
     /// True when another account has a saved login, so a switch is possible.
     var canSwitchElsewhere: Bool { accounts.contains(where: { !$0.current && $0.savedLogin }) }
 
+    /// Paused sessions that have not been notified yet.
+    func pausedToNotify(alreadyNotified: Set<String>) -> [PausedSession] {
+        paused.filter { !alreadyNotified.contains($0.id) }
+    }
+
+    /// Accounts a notification can offer to switch to: mine, with a saved login, not current.
+    func switchTargets(limit: Int = 3) -> [Account] {
+        Array(accounts.filter { !$0.current && $0.savedLogin && $0.owned }.prefix(limit))
+    }
+
+    /// Title and body of the notification for a paused session.
+    func notificationText(for p: PausedSession) -> (title: String, body: String) {
+        let who = account(p.account)?.title ?? String(p.account.prefix(8))
+        let reset = p.resets.isEmpty ? "" : " Resets \(p.resets)."
+        return ("Usage limit reached", "\"\(p.title)\" stopped on \(who).\(reset)")
+    }
+
     /// Sessions that are paused now but were not paused in `previous`.
     func newlyPaused(since previous: Status?) -> [PausedSession] {
         let old = Set(previous?.paused.map(\.id) ?? [])
