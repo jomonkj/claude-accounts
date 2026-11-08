@@ -46,6 +46,21 @@ func main() async {
     check("all paused are new on first status", s.newlyPaused(since: nil).map(\.id) == ["local_p1"])
     check("paused not new the second time", s.newlyPaused(since: s).isEmpty)
 
+    check("no guard banner for a tested version", s.guardBanner == nil)
+    let untested = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"versionTested\": true", with: "\"versionTested\": false").utf8))
+    if case .info(let t)? = untested.guardBanner { check("info banner for an untested version", t.contains("not tested yet")) }
+    else { check("info banner for an untested version", false) }
+    let broken = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"layoutProblems\": []", with: "\"layoutProblems\": [\"no Cookies\"]").utf8))
+    if case .error(let t)? = broken.guardBanner { check("error banner for an unknown layout", t.contains("no Cookies")) }
+    else { check("error banner for an unknown layout", false) }
+    check("recover message: rolled back", Status.recoverMessage(["recovered": true, "action": "rolled back", "step": "saved"])?.contains("previous login is back") == true)
+    check("recover message: finished", Status.recoverMessage(["recovered": true, "action": "finished", "step": "loaded"])?.contains("now finished") == true)
+    check("recover message: nothing", Status.recoverMessage(["recovered": false]) == nil)
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")

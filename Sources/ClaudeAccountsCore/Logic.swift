@@ -26,6 +26,29 @@ public extension Status {
         return "This account has only \(cur.sessions) sessions. Your \(top.sessions) sessions are in \(top.title)."
     }
 
+    /// Warning about the Claude version or login layout, or nil when all is known.
+    var guardBanner: Banner? {
+        if !layoutProblems.isEmpty {
+            return .error("Switching is blocked. Claude \(claudeVersion) stores its login in a way this app does not know: "
+                + layoutProblems.joined(separator: "; ") + ". Update Claude Accounts.")
+        }
+        if !versionTested {
+            return .info("Claude \(claudeVersion.isEmpty ? "(unknown version)" : claudeVersion) is not tested yet. Its login layout looks the same, so switching works. The first good switch marks it as tested.")
+        }
+        return nil
+    }
+
+    /// Text for the result of `claude-switch recover`.
+    static func recoverMessage(_ json: [String: Any]) -> String? {
+        guard json["recovered"] as? Bool == true else { return nil }
+        let step = json["step"] as? String ?? "?"
+        switch json["action"] as? String {
+        case "rolled back": return "A switch stopped in the middle (after \(step)). Your previous login is back."
+        case "finished": return "A switch stopped in the middle (after \(step)). It is now finished."
+        default: return "A switch stopped before it changed anything. Claude is unchanged."
+        }
+    }
+
     /// True when another account has a saved login, so a switch is possible.
     var canSwitchElsewhere: Bool { accounts.contains(where: { !$0.current && $0.savedLogin }) }
 

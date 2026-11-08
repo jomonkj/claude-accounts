@@ -28,15 +28,30 @@ final class Store: ObservableObject {
 
     func run(_ args: [String]) async -> EngineResult { await engine.run(args) }
 
+    private var recovering = false
+
     func refresh() async {
         do {
             let s = try await engine.status()
             if s != status { status = s }
+            if s.pendingRecovery && !recovering { await recover() }
         } catch let e as EngineError {
             banner = .error(e.message)
         } catch {
             banner = .error("Cannot read the engine output: \(error.localizedDescription)")
         }
+    }
+
+    /// Finish or roll back a switch that stopped in the middle (for example, the Mac lost power).
+    func recover() async {
+        recovering = true
+        busy = "Repairing an unfinished switch…"
+        let r = await run(["recover"])
+        busy = nil
+        if r.ok, let msg = Status.recoverMessage(r.json) { banner = .warning(msg) }
+        else if !r.ok { banner = .error(r.output) }
+        status = try? await engine.status()
+        recovering = false
     }
 
     func tick() async {
@@ -73,13 +88,15 @@ final class Store: ObservableObject {
         Task {
             guard let r = await perform("Switching to \(a.title)…", ["switch", a.id]) else { return }
             let shared = r["shared"] as? Int ?? 0
+            let warning = r["warning"] as? String
             busy = "Checking the login…"
             let v = await run(["verify", a.id])
             busy = nil
             await refresh()
             let obj = v.json
             if obj["ok"] as? Bool == true {
-                banner = .success("Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : ""))
+                let text = "Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : "")
+                banner = warning.map { .warning(text + " " + $0) } ?? .success(text)
             } else {
                 banner = .error(obj["message"] as? String ?? v.output)
             }

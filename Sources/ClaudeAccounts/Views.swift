@@ -195,6 +195,7 @@ struct MenuView: View {
             header
             Divider()
             if let b = store.banner { BannerView(banner: b) { store.banner = nil } }
+            if let g = store.status?.guardBanner, store.banner == nil { BannerView(banner: g) {} }
             if let w = store.wrongAccountHint, store.banner == nil { BannerView(banner: .warning(w)) {} }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

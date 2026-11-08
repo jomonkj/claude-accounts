@@ -19,6 +19,7 @@ jobs:
       - name: Tests
         run: |
           tests/engine_test.sh
+          tests/crash_test.sh
           swift run CoreTests
       - name: Build
         run: scripts/build.sh "${GITHUB_REF_NAME#v}"
