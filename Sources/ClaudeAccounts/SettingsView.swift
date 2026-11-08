@@ -55,6 +55,27 @@ struct GeneralTab: View {
                          key: "showNameInMenuBar", value: \.showNameInMenuBar)
             EngineToggle(title: "Save logins automatically", help: "Every 5 minutes, save the login Claude uses now.",
                          key: "autoSaveLogins", value: \.autoSaveLogins)
+            Section("Updates") {
+                HStack {
+                    if let u = store.update {
+                        if u.available, let tag = u.latest {
+                            Text("Version \(tag) is available.")
+                            Spacer()
+                            Button("Update") { store.installUpdate() }
+                        } else if let e = u.error {
+                            Text("Cannot check: \(e)").foregroundStyle(.secondary).lineLimit(2)
+                        } else {
+                            Text("Version \(Store.version) is the latest.")
+                        }
+                    } else {
+                        Text("Version \(Store.version)")
+                    }
+                    if store.update?.available != true {
+                        Spacer()
+                        Button("Check now") { Task { await store.checkForUpdate() } }
+                    }
+                }
+            }
             Section {
                 Button("Show the welcome guide again") { store.showWelcome() }
             }

@@ -56,4 +56,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --generate-notes \
-            "Claude-Accounts-${GITHUB_REF_NAME}.zip" "Claude-Accounts-${GITHUB_REF_NAME}.zip.sha256"
+            "Claude-Accounts-${GITHUB_REF_NAME}.zip" "Claude-Accounts-${GITHUB_REF_NAME}.zip.sha256" \
+            scripts/install-release.sh

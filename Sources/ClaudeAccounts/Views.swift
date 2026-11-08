@@ -159,6 +159,17 @@ struct MenuView: View {
             header
             Divider()
             if let b = store.banner { BannerView(banner: b) { store.banner = nil } }
+            if let u = store.update, u.available, let tag = u.latest {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
+                    Text("Version \(tag) is available.").font(.system(size: 11))
+                    Spacer()
+                    Button("Update") { store.installUpdate() }.controlSize(.small).disabled(store.busy != nil)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue.opacity(0.1)))
+                .padding(.horizontal, 10).padding(.top, 8)
+            }
             if let g = store.status?.guardBanner, store.banner == nil { BannerView(banner: g) {} }
             if let w = store.wrongAccountHint, store.banner == nil { BannerView(banner: .warning(w)) {} }
             ScrollView {

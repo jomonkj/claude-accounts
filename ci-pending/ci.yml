@@ -20,6 +20,8 @@ jobs:
         run: swift run CoreTests
       - name: Universal build
         run: scripts/build.sh "ci-${GITHUB_SHA::7}"
+      - name: Install test
+        run: tests/install_test.sh
       - name: Check architectures
         run: |
           archs="$(lipo -archs "build/Claude Accounts.app/Contents/MacOS/ClaudeAccounts")"

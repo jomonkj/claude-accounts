@@ -12,6 +12,9 @@ final class Store: ObservableObject {
     @Published var launchAtLogin = LoginItem.isEnabled
     @Published var showHidden = false
     @Published var backups: [BackupInfo] = []
+    @Published var update: UpdateInfo?
+    private var lastUpdateCheck = Date.distantPast
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
     private var windows: [String: NSWindow] = [:]
 
     let engine: EngineClient
@@ -69,6 +72,7 @@ final class Store: ObservableObject {
     func tick() async {
         _ = await run(["tick"])
         await refresh()
+        if Date().timeIntervalSince(lastUpdateCheck) > 24 * 3600 { await checkForUpdate() }
     }
 
     @discardableResult
@@ -209,6 +213,26 @@ final class Store: ObservableObject {
 
     func open(_ p: PausedSession) {
         Task { await perform("Opening…", ["open-session", p.id]) }
+    }
+
+    // MARK: updates
+
+    func checkForUpdate() async {
+        lastUpdateCheck = Date()
+        let r = await run(["update-check", Self.version])
+        update = try? JSONDecoder().decode(UpdateInfo.self, from: Data(r.output.utf8))
+    }
+
+    func installUpdate() {
+        guard let tag = update?.latest else { return }
+        guard Dialog.confirm("Install Claude Accounts \(tag)?",
+            "The app downloads the release, checks its checksum, replaces itself, and opens again. Claude is not touched.",
+            ok: "Install") else { return }
+        Task {
+            if await perform("Downloading \(tag)…", ["update-install", tag]) != nil {
+                busy = "Installing \(tag)…"  // the installer stops this app and opens the new one
+            }
+        }
     }
 
     // MARK: windows

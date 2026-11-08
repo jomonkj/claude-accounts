@@ -122,4 +122,23 @@ check "unknown layout refuses add" '! E add >/dev/null'
 check "--force switches anyway" 'E switch AAAAAAAA --force | grep -q "Forced switch"'
 check "recover with no journal is a no-op" 'E recover | grep -q "\"recovered\": false"'
 
+echo "update check (fake gh)"
+cat > "$T/gh" <<'GH'
+#!/bin/sh
+case "$1 $2" in
+  "release view") [ -n "$GH_FAIL" ] && { echo "HTTP 404: Not Found" >&2; exit 1; }
+                  echo '{"tagName":"v1.2.0","url":"https://example/r","publishedAt":"2026-11-08T00:00:00Z"}' ;;
+  "release download") for a; do case "$prev" in --dir) d="$a";; esac; prev="$a"; done
+                      echo 'echo installed' > "$d/install-release.sh" ;;
+esac
+GH
+chmod +x "$T/gh"; export CLAUDE_SWITCH_GH="$T/gh"
+check "newer release found" 'E update-check 1.0.0 | grep -q "\"available\": true"'
+check "same version is not newer" 'E update-check 1.2.0 | grep -q "\"available\": false"'
+check "dev build counts as older" 'E update-check 0.3.0-dev | grep -q "\"available\": true"'
+check "9.9.9 is newer than release 1.2.0 (numeric compare)" 'E update-check 9.9.9 | grep -q "\"available\": false"'
+check "gh error is reported, not a failure" 'GH_FAIL=1 E update-check 1.0.0 | grep -q "404"'
+check "update-install downloads the installer" 'E update-install v1.2.0 | grep -q install-release.sh'
+check "update-install refuses a bad tag" '! E update-install "v1; rm -rf /" >/dev/null'
+
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]

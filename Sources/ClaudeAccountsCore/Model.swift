@@ -72,6 +72,14 @@ public struct SyncResult: Decodable, Equatable, Sendable {
     public let dryRun: Bool
 }
 
+/// Output of `claude-switch update-check <version>`.
+public struct UpdateInfo: Decodable, Equatable, Sendable {
+    public let available: Bool
+    public let latest: String?
+    public let url: String?
+    public let error: String?
+}
+
 /// One entry of `claude-switch backups`.
 public struct BackupInfo: Decodable, Equatable, Sendable {
     public let name: String

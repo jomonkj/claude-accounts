@@ -23,6 +23,8 @@ Commands (all print JSON unless noted):
   hide|unhide <account>       hide an account from the list
   set <key> <value>           change a setting (true/false or a number)
   open-session <session-id>   open a session in Claude
+  update-check <version>      is a newer GitHub Release out? (uses gh)
+  update-install <tag>        download, check and install a release, then reopen the app
 
 <account> is a full account UUID or its first 8 characters.
 """
@@ -47,6 +49,8 @@ CLI_JSON = f"{HOME}/.claude.json"
 TEST = bool(os.environ.get("CLAUDE_SWITCH_TEST"))
 CLAUDE_BIN = "/Applications/Claude.app/Contents/MacOS/Claude"
 BUNDLE_ID = "com.anthropic.claudefordesktop"
+REPO = os.environ.get("CLAUDE_ACCOUNTS_REPO", "jomonkj/claude-accounts")
+GH = os.environ.get("CLAUDE_SWITCH_GH") or shutil.which("gh", path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin") or "gh"
 
 LOGIN_FILES = ["Cookies", "Cookies-journal"]
 LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
@@ -704,6 +708,49 @@ def tick():
     return {"done": done}
 
 
+def version_tuple(v):
+    nums = re.findall(r"\d+", (v or "").split("-")[0])
+    return tuple(int(n) for n in nums[:3]) + (0,) * (3 - len(nums[:3]))
+
+
+def update_check(current):
+    """Latest release vs. the running version. Never fails: problems come back as `error`."""
+    try:
+        r = subprocess.run([GH, "release", "view", "--repo", REPO, "--json", "tagName,url,publishedAt"],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {"available": False, "error": f"gh is not available: {e}"}
+    if r.returncode != 0:
+        msg = (r.stderr or r.stdout).strip().splitlines()
+        return {"available": False, "error": msg[-1] if msg else "gh failed"}
+    rel = json.loads(r.stdout)
+    latest = rel.get("tagName", "")
+    newer = version_tuple(latest) > version_tuple(current)
+    return {"available": newer, "latest": latest, "current": current, "url": rel.get("url", "")}
+
+
+def update_install(tag):
+    """Download and install a release with the release's own install script, then reopen."""
+    if not re.fullmatch(r"v\d+\.\d+\.\d+(-[\w.]+)?", tag or ""):
+        raise Fail(f"Not a release tag: {tag}")
+    work = os.path.join(BASE, "update")
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(work)
+    r = subprocess.run([GH, "release", "download", tag, "--repo", REPO, "--pattern", "install-release.sh",
+                        "--dir", work], capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        raise Fail("Cannot download the release: " + (r.stderr or r.stdout).strip())
+    script = os.path.join(work, "install-release.sh")
+    log(f"update to {tag}")
+    if TEST:
+        return {"ok": True, "tag": tag, "script": script}
+    # Run detached: the installer stops this app, replaces it, and opens the new version.
+    subprocess.Popen(["/bin/bash", script, "--tag", tag], stdout=open(os.path.join(work, "install.log"), "w"),
+                     stderr=subprocess.STDOUT, start_new_session=True,
+                     env={**os.environ, "PATH": f"{os.path.dirname(GH)}:/usr/bin:/bin:/usr/sbin:/sbin"})
+    return {"ok": True, "tag": tag}
+
+
 def main(argv):
     cmd, args = (argv[1] if len(argv) > 1 else "status"), argv[2:]
     if os.path.basename(argv[0]) == "claude-accounts" and len(argv) == 1:
@@ -757,6 +804,10 @@ def main(argv):
         v = args[1].lower()
         s[args[0]] = v in ("1", "true", "on", "yes") if isinstance(DEFAULTS[args[0]], bool) else int(v)
         save_settings(s); out = {"ok": True}
+    elif cmd == "update-check":
+        out = update_check(args[0] if args else "0.0.0")
+    elif cmd == "update-install":
+        out = update_install(args[0] if args else "")
     elif cmd == "open-session":
         open_claude(f"claude://claude.ai/epitaxy/{args[0]}"); out = {"ok": True}
     else:
