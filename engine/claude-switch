@@ -11,7 +11,11 @@ Commands (all print JSON unless noted):
   verify <account>            wait until Claude runs signed in as <account>
   add [--force]               quit Claude, save this login, open Claude signed out
   recover                     finish or roll back a switch that stopped in the middle
-  share [--dry-run]           copy missing or newer sessions into the current account
+  sync [--dry-run]            two-way sync of session lists between "mine" accounts
+  share [--dry-run]           old name for sync
+  mine|not-mine <account>     mark an account as yours (sync uses only these)
+  backups                     list backups
+  restore <name>              restore a backup (the current state is backed up first)
   tick                        periodic job: auto-save login, daily backup
   backup                      copy all session lists to ~/Backups/claude-sessions
   label [<account>] <name>    name an account (no account = current one)
@@ -47,8 +51,10 @@ BUNDLE_ID = "com.anthropic.claudefordesktop"
 LOGIN_FILES = ["Cookies", "Cookies-journal"]
 LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
 CONFIG_KEYS = ["oauth:tokenCacheV2", "lastKnownAccountUuid"]
-DEFAULTS = {"shareSessions": False, "autoSaveLogins": True, "dailyBackup": True,
-            "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {}}
+DEFAULTS = {"syncOnSwitch": False, "autoSaveLogins": True, "dailyBackup": True,
+            "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {},
+            "owned": [], "syncConfirmed": False}
+LIST_KEYS = ("hidden", "labels", "owned")
 
 os.umask(0o077)
 os.makedirs(PROFILES, exist_ok=True)
@@ -88,6 +94,11 @@ def write_json(path, data):
 def settings():
     s = dict(DEFAULTS)
     s.update(read_json(SETTINGS, {}) or {})
+    if "shareSessions" in s:  # renamed in v1.0
+        s.setdefault("syncOnSwitch", s["shareSessions"])
+        if s.pop("shareSessions"):
+            s["syncOnSwitch"] = True
+    s["owned"] = list(s.get("owned") or [])
     s["labels"] = dict(s.get("labels") or {})
     s["hidden"] = list(s.get("hidden") or [])
     if os.path.exists(OLD_LABELS) and not s.get("importedV1Labels"):  # names from version 1
@@ -357,29 +368,63 @@ def save_current(mode="switch"):
 
 # ---------- sessions ----------
 
-def share_into(acc, dry=False):
-    """Copy sessions that are missing or older in `acc`. Returns the count."""
+def session_index(acc, dirs):
+    """Session files of one account: ({file name: [paths]}, {deleted session ids})."""
+    files, deleted = {}, set()
+    for d in dirs.get(acc, []):
+        for name in os.listdir(d):
+            if name.startswith("local_") and name.endswith(".json"):
+                files.setdefault(name, []).append(os.path.join(d, name))
+            elif name.startswith("deleted_"):
+                deleted.add(name[len("deleted_"):])
+    return files, deleted
+
+
+def owned(s=None):
+    return set((s or settings())["owned"])
+
+
+def sync_sessions(dry=False):
+    """Two-way sync of session list files between "mine" accounts.
+
+    Rules: the newest copy of a session (by modification time) goes to every "mine" account
+    that has an older copy or none; a session deleted in any "mine" account is not copied
+    to accounts that do not have it; nothing is ever deleted; accounts that are not "mine"
+    are not read and not written.
+    """
     dirs = account_dirs()
-    if not dirs.get(acc):
-        if dry:
-            return 0
-        raise Fail("This account has no session folder yet. Start one session in Claude, then share again.")
-    target = max(dirs[acc], key=os.path.getmtime)
-    n = 0
-    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
-        if f.startswith(os.path.join(SESS, acc) + os.sep):
-            continue
-        base = os.path.basename(f)
-        dst = os.path.join(target, base)
-        if os.path.exists(os.path.join(target, "deleted_" + base[len("local_"):-len(".json")])):
-            continue
-        if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(f) - 1:
-            continue
-        n += 1
-        if not dry:
-            shutil.copy2(f, dst)
-    log(f"share into {acc}: {n} sessions{' (dry run)' if dry else ''}")
-    return n
+    members = sorted(a for a in owned() if dirs.get(a))
+    skipped = sorted(a for a in owned() if not dirs.get(a))
+    idx = {a: session_index(a, dirs) for a in members}
+    deleted = set().union(*(idx[a][1] for a in members)) if members else set()
+    newest = {}
+    for a in members:
+        for name, paths in idx[a][0].items():
+            for p in paths:
+                m = os.path.getmtime(p)
+                if name not in newest or m > newest[name][0]:
+                    newest[name] = (m, p)
+    changes = {}
+    for a in members:
+        target = max(dirs[a])  # stable choice of org folder for new files
+        if len(dirs[a]) > 1:
+            target = max(dirs[a], key=lambda d: (len(os.listdir(d)), d))
+        have, n = idx[a][0], 0
+        for name, (m, src) in newest.items():
+            if name in have:
+                for p in have[name]:
+                    if p != src and os.path.getmtime(p) < m - 1:
+                        n += 1
+                        if not dry:
+                            shutil.copy2(src, p)
+            elif name[len("local_"):-len(".json")] not in deleted:
+                n += 1
+                if not dry:
+                    shutil.copy2(src, os.path.join(target, name))
+        changes[a] = n
+    total = sum(changes.values())
+    log(f"sync: {total} changes in {sum(1 for v in changes.values() if v)} accounts{' (dry run)' if dry else ''}")
+    return {"changes": total, "accounts": changes, "skipped": skipped, "dryRun": dry}
 
 
 def transcript_tail(cli_id, size=65536):
@@ -427,6 +472,37 @@ def paused_sessions(days=3):
     return out
 
 
+def list_backups():
+    if not os.path.isdir(BACKUPS):
+        return []
+    out = []
+    for d in sorted(os.listdir(BACKUPS), reverse=True):
+        p = os.path.join(BACKUPS, d)
+        if os.path.isdir(p) and (re.fullmatch(r"\d{4}-\d\d-\d\d", d) or d.startswith("pre-restore-")):
+            n = sum(1 for _ in glob.glob(os.path.join(p, "*", "*", "local_*.json")))
+            out.append({"name": d, "sessions": n, "modified": os.path.getmtime(p)})
+    return out
+
+
+def restore(name):
+    require_no_pending()
+    if name not in {b["name"] for b in list_backups()}:
+        raise Fail(f"No backup named {name}.")
+    with lock():
+        running = claude_running()
+        quit_claude()
+        undo = f"pre-restore-{datetime.datetime.now():%Y%m%d-%H%M%S}"
+        subprocess.run(["rsync", "-a", SESS + "/", os.path.join(BACKUPS, undo) + "/"], check=True)
+        subprocess.run(["rsync", "-a", "--delete", os.path.join(BACKUPS, name) + "/", SESS + "/"], check=True)
+        pre = sorted(d for d in os.listdir(BACKUPS) if d.startswith("pre-restore-"))
+        for old in pre[:-3]:
+            shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
+        if running:
+            open_claude()
+    log(f"restored backup {name} (undo: {undo})")
+    return {"ok": True, "restored": name, "undo": undo}
+
+
 def backup(keep):
     os.makedirs(BACKUPS, exist_ok=True)
     dest = os.path.join(BACKUPS, f"{datetime.date.today():%Y-%m-%d}")
@@ -440,13 +516,23 @@ def backup(keep):
 
 # ---------- commands ----------
 
+def cli_emails():
+    """Account emails known to the claude CLI: ~/.claude.json and ~/.claude-*/.claude.json
+    (one per CLAUDE_CONFIG_DIR, for example the claude-b launcher)."""
+    out = {}
+    for path in [CLI_JSON] + sorted(glob.glob(f"{HOME}/.claude-*/.claude.json")):
+        o = (read_json(path, {}) or {}).get("oauthAccount") or {}
+        if o.get("accountUuid") and o.get("emailAddress"):
+            out.setdefault(o["accountUuid"], o["emailAddress"])
+    return out
+
+
 def status():
     s = settings()
     cur = current_account()
-    cli = (read_json(CLI_JSON, {}) or {}).get("oauthAccount") or {}
     labels = dict(s["labels"])
-    if cli.get("accountUuid") and cli.get("emailAddress"):
-        labels.setdefault(cli["accountUuid"], cli["emailAddress"])
+    for acc, email in cli_emails().items():
+        labels.setdefault(acc, email)
     dirs = account_dirs()
     accounts = []
     for a in known_accounts():
@@ -457,14 +543,14 @@ def status():
             "lastUsed": max((os.path.getmtime(f) for f in files), default=0),
             "savedLogin": meta is not None, "savedAt": (meta or {}).get("savedAt", 0),
             "savedMode": (meta or {}).get("mode", ""),
-            "current": a == cur, "hidden": a in s["hidden"],
+            "current": a == cur, "hidden": a in s["hidden"], "owned": a in s["owned"],
         })
     accounts.sort(key=lambda x: (not x["current"], -x["sessions"], -x["lastUsed"], x["id"]))
     v = claude_version()
     return {"current": cur, "signedIn": has_login(), "claudeRunning": claude_running(),
             "claudeVersion": v, "versionTested": v in tested_versions(s),
             "layoutProblems": layout_problems(), "pendingRecovery": pending() is not None,
-            "settings": {k: val for k, val in s.items() if k not in ("labels", "importedV1Labels", "verifiedVersions")},
+            "settings": {k: val for k, val in s.items() if k not in ("labels", "importedV1Labels", "verifiedVersions", "owned")},
             "accounts": accounts, "paused": paused_sessions()}
 
 
@@ -496,7 +582,11 @@ def switch(target, force=False):
         checkpoint("saved")
         load_login(os.path.join(PROFILES, target))
         checkpoint("loaded")
-        shared = share_into(target) if settings()["shareSessions"] and account_dirs().get(target) else 0
+        shared = 0
+        s = settings()
+        if s["syncOnSwitch"] and target in s["owned"] and s["syncConfirmed"]:
+            backup(s["backupKeep"])
+            shared = sync_sessions()["changes"]
         checkpoint("synced")
         open_claude()
         end_journal()
@@ -569,22 +659,26 @@ def recover():
             "op": j.get("op"), "target": j.get("target")}
 
 
-def share(dry):
-    if not dry:
-        require_no_pending()
-    cur = current_account()
-    if not cur:
-        raise Fail("Not signed in.")
+def sync_cmd(dry):
+    if not owned():
+        raise Fail("No account is marked as mine. Mark your own accounts first.")
     if dry:
-        return {"count": share_into(cur, dry=True)}
+        return sync_sessions(dry=True)
+    require_no_pending()
     with lock():
         backup(settings()["backupKeep"])
-        quit_claude()
+        running = claude_running()
+        quit_claude()  # Claude may write the same files while it runs
         try:
-            n = share_into(cur)
+            out = sync_sessions()
         finally:
-            open_claude()
-    return {"count": n}
+            if running:
+                open_claude()
+    s = settings()
+    if not s["syncConfirmed"]:
+        s["syncConfirmed"] = True
+        save_settings(s)
+    return out
 
 
 def tick():
@@ -628,8 +722,16 @@ def main(argv):
         out = add(force="--force" in args)
     elif cmd == "recover":
         out = recover()
-    elif cmd == "share":
-        out = share("--dry-run" in args)
+    elif cmd in ("sync", "share"):
+        out = sync_cmd("--dry-run" in args)
+    elif cmd in ("mine", "not-mine"):
+        acc = resolve(args[0] if args else "")
+        o = set(s["owned"]); (o.add if cmd == "mine" else o.discard)(acc)
+        s["owned"] = sorted(o); save_settings(s); out = {"ok": True}
+    elif cmd == "backups":
+        out = {"backups": list_backups()}
+    elif cmd == "restore":
+        out = restore(args[0] if args else "")
     elif cmd == "tick":
         out = tick()
     elif cmd == "backup":
@@ -650,8 +752,8 @@ def main(argv):
         h = set(s["hidden"]); (h.add if cmd == "hide" else h.discard)(acc)
         s["hidden"] = sorted(h); save_settings(s); out = {"ok": True}
     elif cmd == "set":
-        if len(args) != 2 or args[0] not in DEFAULTS or args[0] in ("hidden", "labels"):
-            raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in ("hidden", "labels")) + "> <value>")
+        if len(args) != 2 or args[0] not in DEFAULTS or args[0] in LIST_KEYS:
+            raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in LIST_KEYS) + "> <value>")
         v = args[1].lower()
         s[args[0]] = v in ("1", "true", "on", "yes") if isinstance(DEFAULTS[args[0]], bool) else int(v)
         save_settings(s); out = {"ok": True}

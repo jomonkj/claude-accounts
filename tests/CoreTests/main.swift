@@ -61,6 +61,15 @@ func main() async {
     check("recover message: finished", Status.recoverMessage(["recovered": true, "action": "finished", "step": "loaded"])?.contains("now finished") == true)
     check("recover message: nothing", Status.recoverMessage(["recovered": false]) == nil)
 
+    check("owned accounts", s.ownedAccounts.map(\.id) == [A, B])
+    let preview = try! JSONDecoder().decode(SyncResult.self, from: Data(
+        #"{"changes": 20, "accounts": {"\#(A)": 4, "\#(B)": 16, "zzzz9999": 0}, "skipped": [], "dryRun": true}"#.utf8))
+    check("sync preview: biggest first, names, no zero lines",
+          s.syncPreview(preview) == ["jomon@example.com (Team): 16 sessions", "Account aaaa1111: 4 sessions"])
+    let backups = try! JSONDecoder().decode([BackupInfo].self, from: Data(
+        #"[{"name": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "sessions": 9, "modified": 2}]"#.utf8))
+    check("undo backup is marked", backups.map(\.isUndo) == [false, true])
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")

@@ -114,16 +114,48 @@ final class Store: ObservableObject {
         }
     }
 
-    func shareNow() {
+    func syncNow() {
         Task {
-            let dry = await run(["share", "--dry-run"])
-            let n = dry.json["count"] as? Int ?? 0
-            guard n > 0 else { banner = .info("This account already has every session."); return }
-            guard Dialog.confirm("Share \(n) sessions into this account?",
-                "A backup is made first. Claude quits, the new or newer sessions of your other accounts are copied into this account, and Claude opens again. Other accounts keep their own sessions.",
-                ok: "Share") else { return }
-            if let r = await perform("Sharing sessions…", ["share"]) {
-                banner = .success("\(r["count"] as? Int ?? 0) sessions are now in this account.")
+            guard let s = status else { return }
+            guard !s.ownedAccounts.isEmpty else {
+                banner = .info("Mark your own accounts first: right-click an account, then Mark as mine.")
+                return
+            }
+            let dry = await run(["sync", "--dry-run"])
+            guard dry.ok, let r = try? JSONDecoder().decode(SyncResult.self, from: Data(dry.output.utf8)) else {
+                banner = .error(dry.output); return
+            }
+            guard r.changes > 0 else { banner = .info("All your accounts already have every session."); return }
+            let lines = s.syncPreview(r).map { "• " + $0 }.joined(separator: "\n")
+            let first = s.settings.syncConfirmed ? "" : "This is your first sync. Check the numbers.\n\n"
+            guard Dialog.confirm("Sync \(r.changes) sessions between your accounts?",
+                first + lines + "\n\nA backup is made first. Claude quits during the sync and opens again. Accounts that are not marked as mine are not touched.",
+                ok: "Sync") else { return }
+            if let out = await perform("Syncing sessions…", ["sync"]) {
+                banner = .success("\(out["changes"] as? Int ?? 0) sessions synced.")
+            }
+        }
+    }
+
+    func setOwned(_ a: Account, _ mine: Bool) {
+        Task { await perform("Saving…", [mine ? "mine" : "not-mine", a.id]) }
+    }
+
+    func restoreBackup() {
+        Task {
+            let r = await run(["backups"])
+            guard r.ok, let data = try? JSONSerialization.data(withJSONObject: r.json["backups"] ?? []),
+                  let list = try? JSONDecoder().decode([BackupInfo].self, from: data), !list.isEmpty else {
+                banner = .info("No backups yet."); return
+            }
+            let titles = list.map { b in
+                (b.isUndo ? "Before restore " + b.name.dropFirst("pre-restore-".count) : b.name) + "  (\(b.sessions) sessions)"
+            }
+            guard let i = Dialog.choose("Restore a backup",
+                "The session lists of all accounts go back to the backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+                titles, ok: "Restore") else { return }
+            if let out = await perform("Restoring…", ["restore", list[i].name]) {
+                banner = .success("Restored \(list[i].name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
             }
         }
     }
@@ -200,6 +232,18 @@ enum Dialog {
         a.messageText = title; a.informativeText = text
         a.addButton(withTitle: ok); a.addButton(withTitle: "Cancel")
         return a.runModal() == .alertFirstButtonReturn
+    }
+
+    /// A list choice. Returns the chosen index, or nil.
+    static func choose(_ title: String, _ text: String, _ items: [String], ok: String) -> Int? {
+        NSApp.activate(ignoringOtherApps: true)
+        let a = NSAlert()
+        a.messageText = title; a.informativeText = text
+        let pop = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 300, height: 26), pullsDown: false)
+        pop.addItems(withTitles: items)
+        a.accessoryView = pop
+        a.addButton(withTitle: ok); a.addButton(withTitle: "Cancel")
+        return a.runModal() == .alertFirstButtonReturn ? pop.indexOfSelectedItem : nil
     }
 
     static func ask(_ title: String, _ text: String, value: String) -> String? {

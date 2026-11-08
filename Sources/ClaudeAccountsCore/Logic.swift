@@ -49,6 +49,15 @@ public extension Status {
         }
     }
 
+    var ownedAccounts: [Account] { accounts.filter(\.owned) }
+
+    /// Lines for the sync preview, for example "jomon@example.com: 16 sessions". Accounts with 0 changes are left out.
+    func syncPreview(_ r: SyncResult) -> [String] {
+        r.accounts.filter { $0.value > 0 }
+            .sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+            .map { "\(account($0.key)?.title ?? String($0.key.prefix(8))): \($0.value) sessions" }
+    }
+
     /// True when another account has a saved login, so a switch is possible.
     var canSwitchElsewhere: Bool { accounts.contains(where: { !$0.current && $0.savedLogin }) }
 
