@@ -66,17 +66,28 @@ Before every switch, the exact state goes to `.../Claude Account Switcher/last-s
 
 ```bash
 tests/engine_test.sh                                # engine tests in a fake app folder
-scripts/build.sh                                    # build into ./build
+swift run CoreTests                                 # app logic tests (no Xcode needed)
+scripts/build.sh                                    # universal build into ./build
+ARCHS=arm64 scripts/build.sh                        # faster, one architecture
 build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render /tmp/panel.png [dark]
 ```
 
 The `--render` option draws the panel to a PNG file, so you can check the layout without the menu bar.
 
+XCTest and swift-testing need Xcode. This project builds with the Command Line Tools only, so the Swift tests are a small program (`swift run CoreTests`) that exits with code 1 on failure.
+
+## Releases
+
+Push a tag such as `v1.0.0`. The Release workflow runs all tests, builds a universal app (arm64 and x86_64), zips it, and creates a GitHub Release with notes from the commits. If the secret `DEVELOPER_ID_P12` exists, the workflow also signs and notarizes the app.
+
 Layout:
 
 ```
-engine/claude-switch     Python engine (all file work; the app calls it)
-app/Sources/*.swift      SwiftUI menu bar app
-scripts/                 build, install, icon
-tests/engine_test.sh     engine tests
+engine/claude-switch          Python engine (all file work; the app calls it)
+Sources/ClaudeAccountsCore/   models, engine client, derived state (no UI)
+Sources/ClaudeAccounts/       SwiftUI menu bar app
+Tests/CoreTests/              Core tests, run as a program with a fake engine
+tests/engine_test.sh          engine tests
+scripts/                      build, install, icon
+ci-pending/                   CI and release workflows (see ci-pending/README.md)
 ```

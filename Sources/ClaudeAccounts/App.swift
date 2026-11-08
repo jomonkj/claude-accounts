@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ClaudeAccountsCore
 
 @main
 struct ClaudeAccountsApp: App {
@@ -29,7 +30,7 @@ struct ClaudeAccountsApp: App {
 /// Debug: `ClaudeAccounts --render out.png [dark]` draws the panel to a PNG and exits.
 @MainActor
 func renderSnapshot(_ path: String, dark: Bool) async {
-    let store = Store()
+    let store = Store(startTimer: false)
     await store.refresh()
     let host = NSHostingView(rootView: MenuView().environmentObject(store)
         .background(Color(nsColor: .windowBackgroundColor)))
