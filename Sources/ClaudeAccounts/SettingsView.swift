@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import ClaudeAccountsCore
 
-/// The Settings window: General, Accounts, Sync, Backups, Advanced.
+/// The Settings window: General, Accounts, Sync, Backups, Advanced, About.
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @State var tab: String = "general"
@@ -14,6 +14,7 @@ struct SettingsView: View {
             SyncTab().tabItem { Label("Sync", systemImage: "arrow.triangle.2.circlepath") }.tag("sync")
             BackupsTab().tabItem { Label("Backups", systemImage: "externaldrive") }.tag("backups")
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
+            AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
         .frame(width: 620, height: 440)
         .environmentObject(store)
@@ -237,5 +238,32 @@ struct AdvancedTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+struct AboutTab: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        Form {
+            Section("Claude Accounts") {
+                LabeledContent("Version", value: Store.version)
+            }
+            UninstallSection()
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct UninstallSection: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        Section("Uninstall") {
+            HStack {
+                Text("Remove the app, the login item and the CLI commands. Saved logins and backups stay.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("Uninstall…") { store.uninstall() }  // the engine refuses while a switch runs
+            }
+        }
     }
 }
