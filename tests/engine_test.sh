@@ -279,6 +279,9 @@ E label "${IA:0:8}" "alex@example.com" >/dev/null
 out="$(E report)"
 check "report has no email and no ID (the pass check)" '[ "$(echo "$out" | grep -cE "[0-9a-f]{8}-[0-9a-f]{4}|@")" = 0 ]'
 check "known email gets its account placeholder" 'echo "$out" | grep -q "note account 2 and account 3"'
+echo "2026-11-01 10:00:06 label email alex@example.com, id $IA" >> "$R/home/switch.log"
+pair="$(E report | sed -n 's/.*label email \(account [0-9]*\), id \(account [0-9]*\)$/\1|\2/p')"
+check "account named by its email in the app: email and ID get the same placeholder" '[ -n "$pair" ] && [ "${pair%|*}" = "${pair#*|}" ]'
 check "labels are not in the report" '! echo "$out" | grep -qi alex'
 check "home folder shown as ~" 'echo "$out" | grep -q "backup -> ~/Backups" && ! echo "$out" | grep -q "$R"'
 check "another user folder shown as ~" '! echo "$out" | grep -q "demo.user"'

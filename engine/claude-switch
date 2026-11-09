@@ -676,10 +676,10 @@ TOKEN_RE = re.compile(rf"{EMAIL_RE}|{UUID_RE}|(?<![0-9A-Za-z])[0-9a-fA-F]{{8}}(?
 def redact(text, accounts, emails):
     """Replace each email and account ID (full or 8 characters) with "account N".
     The same account gets the same N everywhere in the text: an ID is known by its first
-    8 characters, and a known email (from the claude CLI) by its account."""
+    8 characters, and a known email by its account. `emails` is {email: account}."""
     text = re.sub(r"/Users/[^/\s]+", "~", text.replace(HOME, "~"))
     known = {a[:8].lower() for a in accounts}
-    by_email = {e.lower(): a[:8].lower() for a, e in emails.items()}
+    by_email = {e.lower(): a[:8].lower() for e, a in emails.items()}
     names = {}
 
     def sub(m):
@@ -736,7 +736,17 @@ def report():
     out += ["", f"Paused sessions: {len(st['paused'])}", "", "Last log lines:"]
     out += ["  " + line for line in log_tail()]
     accounts = {a["id"] for a in st["accounts"]} | set(owned) | set(s["hidden"])
-    return redact("\n".join(out) + "\n", accounts, cli_emails())
+    return redact("\n".join(out) + "\n", accounts, account_emails(st))
+
+
+def account_emails(st):
+    """{email: account} from the claude CLI and from the account names in status
+    (a name is often the email), so an email and its account ID get the same placeholder."""
+    out = {e: a for a, e in cli_emails().items()}
+    for a in st["accounts"]:
+        for e in re.findall(EMAIL_RE, a.get("name") or ""):
+            out.setdefault(e, a["id"])
+    return out
 
 
 def cmd_list():
