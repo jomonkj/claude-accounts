@@ -281,9 +281,8 @@ final class Store: ObservableObject {
     }
 
     func remove(_ a: Account) {
-        guard let s = status, s.canRemove(a) else {
-            banner = .info("You cannot remove the current account. Switch to another account first."); return
-        }
+        if let why = Status.removeRefusal(status, a) { banner = .info(why); return }
+        guard let s = status else { return }
         let c = s.removeConfirmation(a)
         guard Dialog.confirm(c.title, c.text, ok: "Remove") else { return }
         Task {

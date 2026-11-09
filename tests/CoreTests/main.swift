@@ -67,6 +67,11 @@ func main() async {
     let other = s.account(B)!
     check("other account can be removed", s.canRemove(other))
     check("current account cannot be removed", !s.canRemove(s.currentAccount!))
+    check("remove refusal: none for another account", Status.removeRefusal(s, other) == nil)
+    check("remove refusal: current account", Status.removeRefusal(s, s.currentAccount!)
+          == "You cannot remove the current account. Switch to another account first.")
+    check("remove refusal: no status yet is not called the current account",
+          Status.removeRefusal(nil, other) == "The app has not read the accounts yet. Try again in a moment.")
     let confirm = s.removeConfirmation(other)
     check("confirm title names the account", confirm.title == "Remove jomon@example.com (Team)?")
     for word in ["saved login", "name", "settings", "sessions", "backups", "sign in"] {

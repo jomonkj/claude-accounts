@@ -93,6 +93,12 @@ public extension Status {
     /// Claude must always keep its signed-in account, so the current account cannot be removed.
     func canRemove(_ a: Account) -> Bool { !a.current }
 
+    /// Why `a` cannot be removed now, or nil when it can. `status` is nil before the first refresh.
+    static func removeRefusal(_ status: Status?, _ a: Account) -> String? {
+        guard let status else { return "The app has not read the accounts yet. Try again in a moment." }
+        return status.canRemove(a) ? nil : "You cannot remove the current account. Switch to another account first."
+    }
+
     /// Title and text of the confirm dialog for `claude-switch remove`.
     func removeConfirmation(_ a: Account) -> (title: String, text: String) {
         ("Remove \(a.title)?",
