@@ -967,8 +967,8 @@ def save_signed_in(target):
     if cur != target:
         log(f"sign in to save: expected {target}, Claude is on {cur}")
         return {"ok": True, "saved": False, "match": False, "expected": target, "current": cur,
-                "message": f"Claude is signed in to a different account ({cur[:8]}), not the one you picked. "
-                           f"The login was not saved under the picked account. Sign out in Claude, then sign in to the picked account."}
+                "message": f"Claude is signed in to another account ({cur[:8]}). Nothing was saved. "
+                           "In Claude, sign out. Then sign in to the account you picked."}
     try:
         with lock():
             if pending():

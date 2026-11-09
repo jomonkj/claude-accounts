@@ -114,7 +114,7 @@ public extension Status {
             return .success("Login of \(title) is saved. You can now switch to it with one click.")
         }
         if json["match"] as? Bool == false {
-            return .warning(json["message"] as? String ?? "Claude is signed in to a different account. The login was not saved under \(title).")
+            return .warning(json["message"] as? String ?? "Claude is signed in to another account. The login of \(title) was not saved.")
         }
         return nil
     }

@@ -195,8 +195,8 @@ func main() async {
           Status.signInResult(["ok": true, "saved": false, "waiting": true, "busy": true], title: "Test") == nil)
     check("sign-in result: saved", Status.signInResult(["ok": true, "saved": true, "match": true], title: "Test")
           == .success("Login of Test is saved. You can now switch to it with one click."))
-    if case .warning(let t)? = Status.signInResult(["ok": true, "saved": false, "match": false, "message": "Claude is signed in to a different account."], title: "Test") {
-        check("sign-in result: mismatch is a warning with the engine message", t.contains("different account"))
+    if case .warning(let t)? = Status.signInResult(["ok": true, "saved": false, "match": false, "message": "Claude is signed in to another account."], title: "Test") {
+        check("sign-in result: mismatch is a warning with the engine message", t.contains("another account"))
     } else { check("sign-in result: mismatch is a warning with the engine message", false) }
 
     print("Debug report")

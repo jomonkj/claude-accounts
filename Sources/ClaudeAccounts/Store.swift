@@ -187,8 +187,8 @@ final class Store: ObservableObject {
 
     /// "Sign in to save": the `add` flow, then wait until Claude is signed in to the picked account.
     func signInToSave(_ a: Account) {
-        guard Dialog.confirm("Sign in to \(a.title) to save its login?",
-            "1. Claude quits. Your current login is saved first.\n2. Claude opens signed out.\n3. In Claude, sign in to \(a.title).\n4. The app sees the sign-in and saves the login. It tells you when the login is saved.\n\nRunning tasks in Claude stop. Finish them first.",
+        guard Dialog.confirm("Sign in to \(a.title)?",
+            "Claude quits and opens signed out. Your login is saved first.\n\nThen sign in to \(a.title) in Claude. The app saves that login and tells you.\n\nRunning tasks in Claude stop.",
             ok: "Continue") else { return }
         Task {
             guard await perform("Saving your login…", ["add"]) != nil else { return }
@@ -207,7 +207,7 @@ final class Store: ObservableObject {
                 banner = b
                 await refresh()
                 if case .success(let t) = b { notifier.say("Login saved", t) }
-                else if case .warning(let t) = b { notifier.say("Different account", t) }
+                else if case .warning(let t) = b { notifier.say("Other account", t) }
                 return
             }
         }
