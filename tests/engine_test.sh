@@ -272,7 +272,34 @@ check "...and the login is in the profile" '[ -f "$CLAUDE_SWITCH_HOME/profiles/D
 check "status shows the saved login" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"DDDDDDDD-4\" and a[\"savedLogin\"]] else 1)"'
 check "unknown account fails" '! E save-login ZZZZ >/dev/null'
 
-echo "update check (fake gh)"
+echo "update check (curl, no gh)"
+# A file:// folder that acts as the GitHub API. Real curl reads it; no gh on the way.
+R="$T/api/repos/jomonkj/claude-accounts/releases"; mkdir -p "$R/tags" "$T/dl"
+echo 'echo installed' > "$T/dl/install-release.sh"
+release_json() { # <tag>
+  echo "{\"tag_name\":\"$1\",\"html_url\":\"https://example/r/$1\",\"published_at\":\"2026-11-08T00:00:00Z\",
+        \"assets\":[{\"name\":\"install-release.sh\",\"browser_download_url\":\"file://$T/dl/install-release.sh\"}]}"; }
+release_json v1.2.0 > "$R/latest"; release_json v1.2.0 > "$R/tags/v1.2.0"
+echo '{"tag_name":"v1.3.0","assets":[]}' > "$R/tags/v1.3.0"
+export CLAUDE_ACCOUNTS_API="file://$T/api" CLAUDE_SWITCH_GH="$T/no-gh"
+check "newer release found" 'E update-check 1.0.0 | grep -q "\"available\": true"'
+check "...with the tag and the page URL" 'E update-check 1.0.0 | grep -q "\"latest\": \"v1.2.0\"" && E update-check 1.0.0 | grep -q "example/r/v1.2.0"'
+check "same version is not newer" 'E update-check 1.2.0 | grep -q "\"available\": false"'
+check "dev build counts as older" 'E update-check 0.3.0-dev | grep -q "\"available\": true"'
+check "9.9.9 is newer than release 1.2.0 (numeric compare)" 'E update-check 9.9.9 | grep -q "\"available\": false"'
+echo 'not json' > "$R/latest"
+check "bad API answer is an error, not a crash" 'E update-check 1.0.0 | grep -q "did not return JSON"'
+mv "$R/latest" "$R/latest.off"
+check "missing release is an error, not a crash" 'E update-check 1.0.0 | grep -q "\"error\""'
+mv "$R/latest.off" "$R/latest"; release_json v1.2.0 > "$R/latest"
+check "update-install downloads the installer" 'E update-install v1.2.0 | grep -q install-release.sh'
+check "...and the file is the release's installer" 'grep -q "echo installed" "$CLAUDE_SWITCH_HOME/update/install-release.sh"'
+check "update-install fails for a release with no installer" '! E update-install v1.3.0 >/dev/null && grep -q "no install-release.sh" "$T/err"'
+check "update-install refuses a bad tag" '! E update-install "v1; rm -rf /" >/dev/null'
+check "unreachable API is an error, not a crash" 'CLAUDE_ACCOUNTS_API=https://127.0.0.1:9 E update-check 1.0.0 | grep -q "\"error\""'
+
+echo "update check (gh fallback when curl fails)"
+export CLAUDE_ACCOUNTS_API="file://$T/no-api"
 cat > "$T/gh" <<'GH'
 #!/bin/sh
 case "$1 $2" in

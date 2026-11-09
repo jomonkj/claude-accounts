@@ -1,0 +1,37 @@
+name: Install smoke test
+# Installs the published latest release on a clean Mac with no gh, with the README command.
+# A release made with GITHUB_TOKEN does not start `release` events, so this runs after the
+# Release workflow ends (workflow_run), and by hand.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      PATH: /usr/bin:/bin:/usr/sbin:/sbin
+    steps:
+      - name: No gh on PATH
+        run: '! command -v gh'
+      - name: Install with the README command
+        run: curl -fsSL https://github.com/jomonkj/claude-accounts/releases/latest/download/install-release.sh | bash -s -- --no-open
+      - name: Check the installed app
+        run: |
+          set -eu
+          APP="$HOME/Applications/Claude Accounts.app"
+          test -x "$APP/Contents/MacOS/ClaudeAccounts"
+          if xattr -r "$APP" | grep -q com.apple.quarantine; then echo "quarantine flag left"; exit 1; fi
+          VERSION="$(defaults read "$APP/Contents/Info" CFBundleShortVersionString)"
+          LATEST="$(curl -fsSL https://api.github.com/repos/jomonkj/claude-accounts/releases/latest | plutil -extract tag_name raw -o - -)"
+          echo "installed $VERSION, latest $LATEST"
+          test "v$VERSION" = "$LATEST"
+          OUT="$("$HOME/.local/bin/claude-switch" update-check "$VERSION")"
+          echo "$OUT"
+          echo "$OUT" | grep -q '"available": false'
+          echo "$OUT" | grep -q "\"latest\": \"$LATEST\""
+          ! echo "$OUT" | grep -q '"error"'

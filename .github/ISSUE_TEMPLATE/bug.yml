@@ -1,0 +1,21 @@
+name: Bug
+description: Something does not work.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened?
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Debug report
+      description: |
+        Settings → About → Copy debug report, then paste it here.
+        Or run `claude-switch report` in Terminal. Emails and account IDs show as "account 1", "account 2".
+      render: text
+    validations:
+      required: true
