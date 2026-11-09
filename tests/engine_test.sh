@@ -251,6 +251,15 @@ check "other account signed in: mismatch" 'echo "$out" | grep -q "\"match\": fal
 check "...and the message names the signed-in account" 'echo "$out" | grep -q "BBBBBBBB-2"'
 check "...and no login saved for the picked account" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4" ]'
 login_as DDDDDDDD-4 cookieD
+/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(2)" & holder=$!
+sleep 0.5
+out="$(E save-login DDDDDDDD)"; rc=$?
+check "lock busy (the 5-minute tick): not an error, busy" '[ "$rc" = 0 ] && echo "$out" | grep -q "\"busy\": true" && echo "$out" | grep -q "\"saved\": false"'
+check "...and nothing saved yet" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4" ]'
+wait $holder
+echo '{"op":"switch","step":"loaded"}' > "$CLAUDE_SWITCH_HOME/journal.json"
+check "unfinished switch: busy, not an error" 'E save-login DDDDDDDD | grep -q "\"busy\": true"'
+rm "$CLAUDE_SWITCH_HOME/journal.json"
 out="$(E save-login DDDDDDDD)"
 check "picked account signed in: saved" 'echo "$out" | grep -q "\"saved\": true"'
 check "...and the login is in the profile" '[ -f "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4/meta.json" ]'

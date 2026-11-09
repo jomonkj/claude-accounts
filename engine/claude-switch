@@ -75,6 +75,10 @@ class Fail(Exception):
     pass
 
 
+class Busy(Fail):
+    """The lock is held: a switch, the 5-minute tick or another engine task runs now."""
+
+
 # ---------- small helpers ----------
 
 def log(msg):
@@ -134,7 +138,7 @@ def lock():
     try:
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        raise Fail("Another switch is running. Wait for it to finish.")
+        raise Busy("Another switch is running. Wait for it to finish.")
     try:
         yield
     finally:
@@ -945,10 +949,13 @@ def save_signed_in(target):
         return {"ok": True, "saved": False, "match": False, "expected": target, "current": cur,
                 "message": f"Claude is signed in to a different account ({cur[:8]}), not the one you picked. "
                            f"The login was not saved under the picked account. Sign out in Claude, then sign in to the picked account."}
-    with lock():
-        if pending():
-            raise Fail("A switch is not finished. Try again in a moment.")
-        save_login(os.path.join(PROFILES, target), "signin")
+    try:
+        with lock():
+            if pending():
+                raise Busy("A switch is not finished.")
+            save_login(os.path.join(PROFILES, target), "signin")
+    except Busy:  # the tick or a switch runs now: the app asks again in a moment
+        return {"ok": True, "saved": False, "waiting": True, "busy": True}
     log(f"sign in to save: saved login of {target}")
     return {"ok": True, "saved": True, "match": True, "account": target}
 
@@ -1018,7 +1025,7 @@ def tick():
             if s["dailyBackup"] and not os.path.isdir(today) and os.path.isdir(SESS):
                 backup(s["backupKeep"])
                 done.append("backup")
-    except Fail:
+    except Busy:
         pass  # a switch is running; try next time
     return {"done": done}
 

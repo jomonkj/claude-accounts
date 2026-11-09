@@ -184,6 +184,8 @@ func main() async {
     check("no button on the current account, even without a saved login",
           curNoLogin.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
     check("sign-in result: still waiting", Status.signInResult(["ok": true, "saved": false, "waiting": true], title: "Test") == nil)
+    check("sign-in result: engine busy (the tick) keeps waiting",
+          Status.signInResult(["ok": true, "saved": false, "waiting": true, "busy": true], title: "Test") == nil)
     check("sign-in result: saved", Status.signInResult(["ok": true, "saved": true, "match": true], title: "Test")
           == .success("Login of Test is saved. You can now switch to it with one click."))
     if case .warning(let t)? = Status.signInResult(["ok": true, "saved": false, "match": false, "message": "Claude is signed in to a different account."], title: "Test") {
