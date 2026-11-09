@@ -281,7 +281,10 @@ release_json() { # <tag>
         \"assets\":[{\"name\":\"install-release.sh\",\"browser_download_url\":\"file://$T/dl/install-release.sh\"}]}"; }
 release_json v1.2.0 > "$R/latest"; release_json v1.2.0 > "$R/tags/v1.2.0"
 echo '{"tag_name":"v1.3.0","assets":[]}' > "$R/tags/v1.3.0"
-export CLAUDE_ACCOUNTS_API="file://$T/api" CLAUDE_SWITCH_GH="$T/no-gh"
+export CLAUDE_ACCOUNTS_API="file://$T/api" CLAUDE_ACCOUNTS_WEB="file://$T/web" CLAUDE_SWITCH_GH="$T/no-gh"
+# github.com fallback links (used when the API fails): only v1.4.0 is there.
+mkdir -p "$T/web/jomonkj/claude-accounts/releases/download/v1.4.0"
+echo 'echo web-installer' > "$T/web/jomonkj/claude-accounts/releases/download/v1.4.0/install-release.sh"
 check "newer release found" 'E update-check 1.0.0 | grep -q "\"available\": true"'
 check "...with the tag and the page URL" 'E update-check 1.0.0 | grep -q "\"latest\": \"v1.2.0\"" && E update-check 1.0.0 | grep -q "example/r/v1.2.0"'
 check "same version is not newer" 'E update-check 1.2.0 | grep -q "\"available\": false"'
@@ -296,6 +299,8 @@ check "update-install downloads the installer" 'E update-install v1.2.0 | grep -
 check "...and the file is the release's installer" 'grep -q "echo installed" "$CLAUDE_SWITCH_HOME/update/install-release.sh"'
 check "update-install fails for a release with no installer" '! E update-install v1.3.0 >/dev/null && grep -q "no install-release.sh" "$T/err"'
 check "update-install refuses a bad tag" '! E update-install "v1; rm -rf /" >/dev/null'
+check "API fails: update-install uses the github.com link" 'E update-install v1.4.0 | grep -q "\"ok\": true" && grep -q web-installer "$CLAUDE_SWITCH_HOME/update/install-release.sh"'
+check "API and github.com fail: error names the API problem" '! E update-install v1.5.0 >/dev/null && grep -q "Cannot download" "$T/err"'
 check "unreachable API is an error, not a crash" 'CLAUDE_ACCOUNTS_API=https://127.0.0.1:9 E update-check 1.0.0 | grep -q "\"error\""'
 
 echo "update check (gh fallback when curl fails)"

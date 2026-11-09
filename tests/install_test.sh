@@ -46,7 +46,7 @@ release() { # <tag>: zip + sha256 in $T/dl/<tag>, and its API entry
     {\"name\":\"Claude-Accounts-$1.zip.sha256\",\"browser_download_url\":\"file://$d/Claude-Accounts-$1.zip.sha256\"}]}" \
     > "$API/tags/$1"; }
 release v9.9.9; release v1.0.0; cp "$API/tags/v9.9.9" "$API/latest"
-export CLAUDE_ACCOUNTS_API="file://$T/api"
+export CLAUDE_ACCOUNTS_API="file://$T/api" CLAUDE_ACCOUNTS_WEB="file://$T/no-web"
 rm -rf "$H"; mv "$T/bin/gh" "$T/gh.off"
 run
 check "good download installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ]'
@@ -66,14 +66,26 @@ rm -rf "$H"; echo '{"tag_name":"v9.9.9","assets":[]}' > "$API/latest"
 run; code=$?
 check "release with no zip stops (no gh)" '[ $code != 0 ] && grep -q "no app zip" "$T/out" && [ ! -e "$H/Applications/Claude Accounts.app" ]'
 
+echo "download with the github.com fallback (API fails, no gh)"
+export CLAUDE_ACCOUNTS_API="file://$T/no-api" CLAUDE_ACCOUNTS_WEB="file://$T/web"
+mkdir -p "$T/web/jomonkj/claude-accounts/releases/download"
+mv "$T/dl/v9.9.9" "$T/dl/v9.9.9.bad"; release v9.9.9
+cp -R "$T/dl/v9.9.9" "$T/web/jomonkj/claude-accounts/releases/download/v9.9.9"
+rm -rf "$H"
+run --tag v9.9.9
+check "API fails: github.com link installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ] && grep -q "Trying the github.com links" "$T/out"'
+rm -rf "$H"
+run --tag "v1;x"; code=$?
+check "bad tag is refused" '[ $code != 0 ] && [ ! -e "$H/Applications/Claude Accounts.app" ]'
+
 echo "download with the gh fallback"
-mv "$T/gh.off" "$T/bin/gh"; export CLAUDE_ACCOUNTS_API="file://$T/no-api"
+mv "$T/gh.off" "$T/bin/gh"; export CLAUDE_ACCOUNTS_WEB="file://$T/no-web"
 rm -rf "$H"
 ditto -c -k --keepParent "$APP" "$T/rel/Claude-Accounts-v9.9.9.zip"
 (cd "$T/rel" && shasum -a 256 Claude-Accounts-v9.9.9.zip > Claude-Accounts-v9.9.9.zip.sha256)
 run
 check "curl fails, gh installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ] && grep -q "Trying gh" "$T/out"'
-unset CLAUDE_ACCOUNTS_API
+unset CLAUDE_ACCOUNTS_API CLAUDE_ACCOUNTS_WEB
 
 echo "uninstall"
 rm -rf "$H" "$T/called"

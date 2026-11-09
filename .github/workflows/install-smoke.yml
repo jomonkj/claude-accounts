@@ -27,7 +27,7 @@ jobs:
           test -x "$APP/Contents/MacOS/ClaudeAccounts"
           if xattr -r "$APP" | grep -q com.apple.quarantine; then echo "quarantine flag left"; exit 1; fi
           VERSION="$(defaults read "$APP/Contents/Info" CFBundleShortVersionString)"
-          LATEST="$(curl -fsSL https://api.github.com/repos/jomonkj/claude-accounts/releases/latest | plutil -extract tag_name raw -o - -)"
+          LATEST="$(curl -fsSLI -o /dev/null -w "%{url_effective}" https://github.com/jomonkj/claude-accounts/releases/latest)"; LATEST="${LATEST##*/tag/}"
           echo "installed $VERSION, latest $LATEST"
           test "v$VERSION" = "$LATEST"
           OUT="$("$HOME/.local/bin/claude-switch" update-check "$VERSION")"

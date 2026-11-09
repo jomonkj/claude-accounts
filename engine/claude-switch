@@ -62,7 +62,10 @@ REPO = os.environ.get("CLAUDE_ACCOUNTS_REPO", "jomonkj/claude-accounts")
 # CLAUDE_ACCOUNTS_API is a test seam: tests point it to a file:// folder.
 API = os.environ.get("CLAUDE_ACCOUNTS_API", "https://api.github.com").rstrip("/")
 CURL = "/usr/bin/curl"
-CURL_PROTO = "=https,file" if API.startswith("file://") else "=https"
+# Fallback when the API fails (rate limit: 60 requests each hour per IP with no sign-in):
+# the normal github.com release links. Also a test seam.
+WEB = os.environ.get("CLAUDE_ACCOUNTS_WEB", "https://github.com").rstrip("/")
+CURL_PROTO = "=https,file" if "file://" in API + WEB else "=https"
 GH = os.environ.get("CLAUDE_SWITCH_GH") or shutil.which("gh", path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin") or "gh"
 
 LOGIN_FILES = ["Cookies", "Cookies-journal"]
@@ -1095,6 +1098,20 @@ def _release(tag=None):
     return rel
 
 
+def _latest_web():
+    """(tag, page URL) of the latest release, from the redirect of github.com/<repo>/releases/latest."""
+    try:
+        r = subprocess.run([CURL, "-fsSLI", "--proto", "=https", "--max-time", "30", "-o", "/dev/null",
+                            "-w", "%{url_effective}", f"{WEB}/{REPO}/releases/latest"],
+                           capture_output=True, text=True, timeout=40)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Fail(f"curl: {e}")
+    tag = r.stdout.rsplit("/tag/", 1)[-1] if "/tag/" in r.stdout else ""
+    if r.returncode != 0 or not re.fullmatch(r"v\d+\.\d+\.\d+(-[\w.]+)?", tag):
+        raise Fail(r.stderr.strip() or "github.com gave no release tag")
+    return tag, r.stdout
+
+
 def _gh_error(r):
     msg = (r.stderr or r.stdout).strip().splitlines()
     return msg[-1] if msg else "gh failed"
@@ -1105,8 +1122,14 @@ def update_check(current):
 
     Uses the public GitHub API with curl. gh is only a fallback, for when curl fails."""
     try:
-        rel = _release()
-        latest, url = rel["tag_name"], rel.get("html_url", "")
+        try:
+            rel = _release()
+            latest, url = rel["tag_name"], rel.get("html_url", "")
+        except Fail as api_error:
+            try:
+                latest, url = _latest_web()
+            except Fail:
+                raise api_error
     except Fail as e:
         try:
             r = subprocess.run([GH, "release", "view", "--repo", REPO, "--json", "tagName,url,publishedAt"],
@@ -1130,10 +1153,17 @@ def update_install(tag):
     os.makedirs(work)
     script = os.path.join(work, "install-release.sh")
     try:
-        assets = {a.get("name"): a.get("browser_download_url") for a in _release(tag).get("assets", [])}
-        if not assets.get("install-release.sh"):
-            raise Fail(f"Release {tag} has no install-release.sh")
-        _curl(assets["install-release.sh"], out=script, timeout=120)
+        try:
+            assets = {a.get("name"): a.get("browser_download_url") for a in _release(tag).get("assets", [])}
+        except Fail as api_error:  # API down or rate-limited: the github.com link of the asset
+            try:
+                _curl(f"{WEB}/{REPO}/releases/download/{tag}/install-release.sh", out=script, timeout=120)
+            except Fail:
+                raise api_error
+        else:
+            if not assets.get("install-release.sh"):
+                raise Fail(f"Release {tag} has no install-release.sh")
+            _curl(assets["install-release.sh"], out=script, timeout=120)
     except Fail as e:
         try:
             r = subprocess.run([GH, "release", "download", tag, "--repo", REPO, "--pattern", "install-release.sh",

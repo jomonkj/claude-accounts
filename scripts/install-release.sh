@@ -14,7 +14,8 @@ set -euo pipefail
 REPO="${CLAUDE_ACCOUNTS_REPO:-jomonkj/claude-accounts}"
 # Test seam: tests point CLAUDE_ACCOUNTS_API to a file:// folder.
 API="${CLAUDE_ACCOUNTS_API:-https://api.github.com}"; API="${API%/}"
-PROTO="=https"; case "$API" in file://*) PROTO="=https,file" ;; esac
+WEB="${CLAUDE_ACCOUNTS_WEB:-https://github.com}"; WEB="${WEB%/}"
+PROTO="=https"; case "$API$WEB" in *file://*) PROTO="=https,file" ;; esac
 DEST="$HOME/Applications/Claude Accounts.app"
 TAG="" APP_SRC="" NO_OPEN=""
 while [ $# -gt 0 ]; do
@@ -48,9 +49,25 @@ download_curl() {
   fetch -o "$WORK/${zip##*/}" "$zip" && fetch -o "$WORK/${sha##*/}" "$sha"
 }
 
+# Fallback when the API fails (for example its rate limit of 60 requests each hour per IP
+# address with no sign-in): the normal github.com release links. The latest tag comes from
+# the redirect of /releases/latest.
+download_web() {
+  local tag="$TAG" url base
+  if [ -z "$tag" ]; then
+    url="$(/usr/bin/curl -fsSLI --proto =https --max-time 60 -o /dev/null -w '%{url_effective}' "$WEB/$REPO/releases/latest")" || return 1
+    tag="${url##*/tag/}"
+  fi
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9._]+)?$ ]] || { echo "Not a release tag: $tag" >&2; return 1; }
+  base="$WEB/$REPO/releases/download/$tag"
+  rm -f "$WORK"/Claude-Accounts-*
+  fetch -o "$WORK/Claude-Accounts-$tag.zip" "$base/Claude-Accounts-$tag.zip" &&
+    fetch -o "$WORK/Claude-Accounts-$tag.zip.sha256" "$base/Claude-Accounts-$tag.zip.sha256"
+}
+
 if [ -z "$APP_SRC" ]; then
   echo "Downloading ${TAG:-the latest release} of ${REPO}..."
-  if ! download_curl; then
+  if ! download_curl && ! { echo "The GitHub API failed. Trying the github.com links..." >&2; download_web; }; then
     command -v gh >/dev/null || { echo "Cannot download the release. Check the network and try again." >&2; exit 1; }
     echo "curl failed. Trying gh..." >&2
     rm -f "$WORK"/Claude-Accounts-*
