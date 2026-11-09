@@ -25,22 +25,21 @@ final class Store: ObservableObject {
 
     init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
         self.engine = engine
-        guard startTimer else { return }
+        // A debug render draws one PNG and exits: no notifications, timer, shortcuts or welcome window.
+        // (The App's own Store is made in a render too, so this check is needed besides startTimer.)
+        guard startTimer, !RenderMode.isOn() else { return }
         notifier.onSwitch = { [weak self] id in
             guard let self, let a = self.account(id) else { return }
             self.switchTo(a)
         }
         notifier.start()
-        // No global keys in the debug render modes.
-        if !CommandLine.arguments.contains(where: { $0.hasPrefix("--render") }) {
-            hotKeys = HotKeys { [weak self] key in
-                switch key {
-                case .openPanel: self?.openPanel()
-                case .nextAccount: self?.switchToNext()
-                }
+        hotKeys = HotKeys { [weak self] key in
+            switch key {
+            case .openPanel: self?.openPanel()
+            case .nextAccount: self?.switchToNext()
             }
-            hotKeys?.apply()
         }
+        hotKeys?.apply()
         if !UserDefaults.standard.bool(forKey: "welcomeDone") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
         }

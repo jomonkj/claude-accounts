@@ -1,5 +1,13 @@
 import Foundation
 
+/// The debug renders (--render, --render-settings, --render-sync, --render-welcome) for the README
+/// screenshots. A render draws one PNG and exits: no notifications, timer, shortcuts or welcome window.
+public enum RenderMode {
+    public static func isOn(_ arguments: [String] = CommandLine.arguments) -> Bool {
+        arguments.contains { $0.hasPrefix("--render") }
+    }
+}
+
 /// Derived state the UI shows. Pure functions, so CoreTests can check them.
 public extension Status {
     var currentAccount: Account? { accounts.first(where: { $0.current }) }

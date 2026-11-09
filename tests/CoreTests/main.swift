@@ -199,6 +199,11 @@ func main() async {
         check("sign-in result: mismatch is a warning with the engine message", t.contains("another account"))
     } else { check("sign-in result: mismatch is a warning with the engine message", false) }
 
+    print("Render mode")
+    check("render modes are found", ["--render", "--render-settings", "--render-sync", "--render-welcome"]
+          .allSatisfy { RenderMode.isOn(["/x/ClaudeAccounts", $0, "a.png"]) })
+    check("a normal launch is not a render", !RenderMode.isOn(["/x/ClaudeAccounts"]))
+
     print("Debug report")
     check("report arguments carry the shortcut states",
           Status.reportArguments(appSettings: [("shortcutOpenPanel", true), ("shortcutNextAccount", false)])

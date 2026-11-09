@@ -16,8 +16,12 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         Bundle.main.bundleIdentifier == nil ? nil : UNUserNotificationCenter.current()
     }
 
+    /// Set by start(). A Store made for a debug render never starts, so it never notifies.
+    private var started = false
+
     func start() {
         guard let center else { allowed = false; return }
+        started = true
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound]) { ok, _ in
             Task { @MainActor in self.allowed = ok }
@@ -32,6 +36,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
     /// Notify each paused session one time. Sessions that are no longer paused are forgotten,
     /// so a session that stops on the limit again is notified again.
     func update(_ status: Status) {
+        guard started else { return }
         let now = Set(status.paused.map(\.id))
         let fresh = status.pausedToNotify(alreadyNotified: notified)
         notified = notified.intersection(now).union(fresh.map(\.id))
@@ -57,7 +62,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     func say(_ title: String, _ body: String) {
-        guard allowed, let center else { return }
+        guard started, allowed, let center else { return }
         let c = UNMutableNotificationContent()
         c.title = title; c.body = body
         center.add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
