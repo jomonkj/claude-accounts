@@ -38,6 +38,7 @@ struct WelcomeView: View {
             .padding(14)
         }
         .frame(width: 520, height: 470)
+        .toggleStyle(.checkbox)  // a switch costs much more memory (see SettingsView)
         .task { await store.refresh() }
     }
 
@@ -81,7 +82,7 @@ struct WelcomeView: View {
                             }
                             Spacer()
                             Toggle("Mine", isOn: Binding(get: { a.owned }, set: { store.setOwned(a, $0) }))
-                                .toggleStyle(.switch).controlSize(.small)
+                                .toggleStyle(.checkbox)
                         }
                         .padding(8)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))

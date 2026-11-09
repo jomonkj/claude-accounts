@@ -17,6 +17,9 @@ struct SettingsView: View {
             AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
         .frame(width: 620, height: 440)
+        // Checkboxes, not switches: the first switch the app draws costs about 50 MB of graphics
+        // memory while the window opens and about 5 MB after it closes (issue #22).
+        .toggleStyle(.checkbox)
         .environmentObject(store)
         .task { await store.refresh(); await store.loadBackups() }
     }
