@@ -23,7 +23,7 @@ case "$1" in
 JSON
   ;;
   sync) echo "{\"changes\": 23, \"accounts\": {\"$A\": 9, \"$S\": 14}, \"skipped\": [\"$J\", \"$T\"], \"dryRun\": true}" ;;
-  backups) echo "{\"backups\": [{\"name\": \"2026-11-09\", \"sessions\": 307, \"modified\": $((now - 3600))}, {\"name\": \"2026-11-08\", \"sessions\": 301, \"modified\": $((now - 90000))}, {\"name\": \"2026-11-07\", \"sessions\": 296, \"modified\": $((now - 176400))}]}" ;;
+  backups) echo "{\"backups\": [{\"name\": \"2026-11-09\", \"kind\": \"daily\", \"time\": \"2026-11-09\", \"sessions\": 307, \"modified\": $((now - 3600))}, {\"name\": \"2026-11-08\", \"kind\": \"daily\", \"time\": \"2026-11-08\", \"sessions\": 301, \"modified\": $((now - 90000))}, {\"name\": \"2026-11-07\", \"kind\": \"daily\", \"time\": \"2026-11-07\", \"sessions\": 296, \"modified\": $((now - 176400))}]}" ;;
   update-check) echo '{"available": false}' ;;
   *) echo '{"ok": true}' ;;
 esac

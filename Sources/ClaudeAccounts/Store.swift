@@ -25,22 +25,21 @@ final class Store: ObservableObject {
 
     init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
         self.engine = engine
-        guard startTimer else { return }
+        // A debug render draws one PNG and exits: no notifications, timer, shortcuts or welcome window.
+        // (The App's own Store is made in a render too, so this check is needed besides startTimer.)
+        guard startTimer, !RenderMode.isOn() else { return }
         notifier.onSwitch = { [weak self] id in
             guard let self, let a = self.account(id) else { return }
             self.switchTo(a)
         }
         notifier.start()
-        // No global keys in the debug render modes.
-        if !CommandLine.arguments.contains(where: { $0.hasPrefix("--render") }) {
-            hotKeys = HotKeys { [weak self] key in
-                switch key {
-                case .openPanel: self?.openPanel()
-                case .nextAccount: self?.switchToNext()
-                }
+        hotKeys = HotKeys { [weak self] key in
+            switch key {
+            case .openPanel: self?.openPanel()
+            case .nextAccount: self?.switchToNext()
             }
-            hotKeys?.apply()
         }
+        hotKeys?.apply()
         if !UserDefaults.standard.bool(forKey: "welcomeDone") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
         }
@@ -187,8 +186,8 @@ final class Store: ObservableObject {
 
     /// "Sign in to save": the `add` flow, then wait until Claude is signed in to the picked account.
     func signInToSave(_ a: Account) {
-        guard Dialog.confirm("Sign in to \(a.title) to save its login?",
-            "1. Claude quits. Your current login is saved first.\n2. Claude opens signed out.\n3. In Claude, sign in to \(a.title).\n4. The app sees the sign-in and saves the login. It tells you when the login is saved.\n\nRunning tasks in Claude stop. Finish them first.",
+        guard Dialog.confirm("Sign in to \(a.title)?",
+            "Claude quits and opens signed out. Your login is saved first.\n\nThen sign in to \(a.title) in Claude. The app saves that login and tells you.\n\nRunning tasks in Claude stop.",
             ok: "Continue") else { return }
         Task {
             guard await perform("Saving your login…", ["add"]) != nil else { return }
@@ -207,7 +206,7 @@ final class Store: ObservableObject {
                 banner = b
                 await refresh()
                 if case .success(let t) = b { notifier.say("Login saved", t) }
-                else if case .warning(let t) = b { notifier.say("Different account", t) }
+                else if case .warning(let t) = b { notifier.say("Other account", t) }
                 return
             }
         }
@@ -281,9 +280,8 @@ final class Store: ObservableObject {
     }
 
     func remove(_ a: Account) {
-        guard let s = status, s.canRemove(a) else {
-            banner = .info("You cannot remove the current account. Switch to another account first."); return
-        }
+        if let why = Status.removeRefusal(status, a) { banner = .info(why); return }
+        guard let s = status else { return }
         let c = s.removeConfirmation(a)
         guard Dialog.confirm(c.title, c.text, ok: "Remove") else { return }
         Task {
@@ -398,7 +396,7 @@ final class Store: ObservableObject {
 
     func restore(_ b: BackupInfo) {
         guard Dialog.confirm("Restore the backup \(b.title)?", b.isRemoved
-            ? "The sessions of the removed account come back. Other accounts do not change. The account comes back as not mine and without a saved login."
+            ? "The sessions of the removed account come back. Newer session files stay. Other accounts do not change. The account comes back as not mine and without a saved login."
             : "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
             ok: "Restore") else { return }
         Task {
@@ -409,14 +407,14 @@ final class Store: ObservableObject {
 
     private func restoreDone(_ b: BackupInfo, _ out: [String: Any]?) async {
         guard let out else { return }
-        banner = .success(b.isRemoved ? "The sessions of the removed account are back."
-            : "Restored \(b.title). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
+        let undo = "To undo, restore \"Before restore\" (\(out["undo"] as? String ?? ""))."
+        banner = .success(b.isRemoved ? "The sessions of the removed account are back. \(undo)" : "Restored \(b.title). \(undo)")
     }
 
     /// Copies the engine's debug report (no emails, no account IDs) to the clipboard.
     /// Returns a short message for the user.
     func copyDebugReport() async -> String {
-        let r = await run(["report"])
+        let r = await run(Status.reportArguments(appSettings: HotKeys.Key.allCases.map { ($0.setting, $0.isOn) }))
         guard r.ok, !r.output.isEmpty else { return "Cannot make the report: \(r.output)" }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(r.output, forType: .string)

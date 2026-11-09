@@ -82,21 +82,7 @@ struct AccountRow: View {
                 trailing
             }
         }
-        .contextMenu {
-            Button("Rename…") { store.rename(account) }
-            Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
-            Button(store.isPinned(account) ? "Unpin" : "Pin to top") { store.setPinned(account, !store.isPinned(account)) }
-            if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
-            if account.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(account) } }
-            if !account.current {
-                Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
-                Button("Remove account…") { store.remove(account) }
-            }
-            Divider()
-            Button("Copy account ID") {
-                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(account.id, forType: .string)
-            }
-        }
+        .contextMenu { AccountMenu(account: account) }
     }
 
     @ViewBuilder var trailing: some View {
@@ -110,6 +96,30 @@ struct AccountRow: View {
             Button("Sign in to save") { store.signInToSave(account) }
                 .controlSize(.small).disabled(store.busy != nil)
                 .help("Sign in to this account in Claude one time. The app saves the login. After that, one click switches to it.")
+        }
+    }
+}
+
+/// The actions of one account. The panel (right-click) and Settings → Accounts (⋯ button) use the same menu.
+/// Actions that do not fit the current account stay in the menu, disabled, with a help text.
+struct AccountMenu: View {
+    @EnvironmentObject var store: Store
+    let account: Account
+
+    var body: some View {
+        Button("Rename…") { store.rename(account) }
+        Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
+        Button(store.isPinned(account) ? "Unpin" : "Pin to top") { store.setPinned(account, !store.isPinned(account)) }
+        if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
+        if account.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(account) } }
+        Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
+            .disabled(account.current).help(account.current ? "The current account always shows." : "")
+        Button("Remove account…") { store.remove(account) }
+            .disabled(account.current)
+            .help(account.current ? "You cannot remove the current account. Switch to another account first." : "")
+        Divider()
+        Button("Copy account ID") {
+            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(account.id, forType: .string)
         }
     }
 }

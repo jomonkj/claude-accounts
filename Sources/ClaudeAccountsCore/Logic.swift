@@ -1,5 +1,13 @@
 import Foundation
 
+/// The debug renders (--render, --render-settings, --render-sync, --render-welcome) for the README
+/// screenshots. A render draws one PNG and exits: no notifications, timer, shortcuts or welcome window.
+public enum RenderMode {
+    public static func isOn(_ arguments: [String] = CommandLine.arguments) -> Bool {
+        arguments.contains { $0.hasPrefix("--render") }
+    }
+}
+
 /// Derived state the UI shows. Pure functions, so CoreTests can check them.
 public extension Status {
     var currentAccount: Account? { accounts.first(where: { $0.current }) }
@@ -93,6 +101,12 @@ public extension Status {
     /// Claude must always keep its signed-in account, so the current account cannot be removed.
     func canRemove(_ a: Account) -> Bool { !a.current }
 
+    /// Why `a` cannot be removed now, or nil when it can. `status` is nil before the first refresh.
+    static func removeRefusal(_ status: Status?, _ a: Account) -> String? {
+        guard let status else { return "The app has not read the accounts yet. Try again in a moment." }
+        return status.canRemove(a) ? nil : "You cannot remove the current account. Switch to another account first."
+    }
+
     /// Title and text of the confirm dialog for `claude-switch remove`.
     func removeConfirmation(_ a: Account) -> (title: String, text: String) {
         ("Remove \(a.title)?",
@@ -108,12 +122,18 @@ public extension Status {
             return .success("Login of \(title) is saved. You can now switch to it with one click.")
         }
         if json["match"] as? Bool == false {
-            return .warning(json["message"] as? String ?? "Claude is signed in to a different account. The login was not saved under \(title).")
+            return .warning(json["message"] as? String ?? "Claude is signed in to another account. The login of \(title) was not saved.")
         }
         return nil
     }
 
     var ownedAccounts: [Account] { accounts.filter(\.owned) }
+
+    /// Engine arguments for the debug report. The app adds the settings only it knows
+    /// (the keyboard shortcuts), as on/off.
+    static func reportArguments(appSettings: [(String, Bool)]) -> [String] {
+        ["report"] + appSettings.flatMap { ["--app-setting", "\($0.0)=\($0.1 ? "on" : "off")"] }
+    }
 
     /// Lines for the sync preview, for example "jomon@example.com: 16 sessions". Accounts with 0 changes are left out.
     func syncPreview(_ r: SyncResult) -> [String] {

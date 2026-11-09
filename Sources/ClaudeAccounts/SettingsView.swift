@@ -134,16 +134,7 @@ struct AccountsTab: View {
                         .labelsHidden().disabled(a.current)
                 }.width(40)
                 TableColumn("") { a in
-                    Menu {
-                        Button("Rename…") { store.rename(a) }
-                        Button(store.isPinned(a) ? "Unpin" : "Pin to top") { store.setPinned(a, !store.isPinned(a)) }
-                        if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
-                        Button("Remove account…") { store.remove(a) }.disabled(a.current)
-                        if a.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(a) } }
-                        Button("Copy account ID") {
-                            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
-                        }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    Menu { AccountMenu(account: a) } label: { Image(systemName: "ellipsis.circle") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.width(30)
             } rows: {
@@ -282,7 +273,7 @@ struct AboutTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Report a problem") {
-                Text("The debug report has the app and Claude versions, the layout check, the settings and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")
+                Text("The debug report has the app and Claude versions, the layout check, the settings (with the keyboard shortcuts) and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Copy debug report") { Task { reportMessage = await store.copyDebugReport() } }

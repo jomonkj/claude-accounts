@@ -92,19 +92,25 @@ public struct UpdateInfo: Decodable, Equatable, Sendable {
 /// One entry of `claude-switch backups`.
 public struct BackupInfo: Decodable, Equatable, Sendable {
     public let name: String
+    /// "daily", "pre-restore" (the undo of a restore) or "removed" (the sessions of a removed account).
+    /// Nil from an engine older than v1.1.
+    public let kind: String?
+    /// Time to show, for example "2026-11-08 12:34".
+    public let time: String?
+    /// First 8 characters of the removed account (kind "removed").
+    public let account: String?
     public let sessions: Int
     public let modified: Double
-    public var isUndo: Bool { name.hasPrefix("pre-restore-") }
-    /// The session folder of a removed account (`removed-YYYYMMDD-HHMMSS-<account>`).
-    public var isRemoved: Bool { name.hasPrefix("removed-") }
+    public var isUndo: Bool { kind == "pre-restore" }
+    public var isRemoved: Bool { kind == "removed" }
 
     /// Name to show in the Backups list.
     public var title: String {
-        if isUndo { return "Before restore " + name.dropFirst("pre-restore-".count) }
-        let p = name.split(separator: "-").map(String.init)
-        guard isRemoved, p.count == 4, p[1].count == 8, p[2].count == 6 else { return name }
-        let (d, t) = (Array(p[1]), Array(p[2]))
-        return "Removed account \(p[3]) (\(String(d[0..<4]))-\(String(d[4..<6]))-\(String(d[6..<8])) \(String(t[0..<2])):\(String(t[2..<4])))"
+        switch kind {
+        case "pre-restore": return "Before restore " + (time ?? name)
+        case "removed": return "Removed account \(account ?? "?") (\(time ?? name))"
+        default: return name
+        }
     }
 }
 

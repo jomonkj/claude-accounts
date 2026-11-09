@@ -192,9 +192,14 @@ o_before="$(others)"
 check "remove the current account is refused" '! E remove "$cur" >/dev/null && grep -q "current account" "$T/err"'
 check "...and its folder stays" '[ -d "$S/$cur" ]'
 check "remove an unknown account fails" '! E remove EEEE >/dev/null && grep -q Unknown "$T/err"'
-/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(2)" & holder=$!
+/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(4)" & holder=$!
 sleep 0.5
 check "remove during a switch is refused" '! E remove DDDDDDDD >/dev/null && grep -q "Another switch" "$T/err"'
+# The checks run inside the lock: the switch may change the current account or end with a journal.
+check "current-account check waits for the lock" '! E remove "$cur" >/dev/null && grep -q "Another switch" "$T/err"'
+echo '{"op":"switch","step":"started"}' > "$CLAUDE_SWITCH_HOME/journal.json"
+check "pending-recovery check waits for the lock" '! E remove DDDDDDDD >/dev/null && grep -q "Another switch" "$T/err"'
+rm "$CLAUDE_SWITCH_HOME/journal.json"
 wait $holder
 check "...and changes nothing" '[ -f "$S/$D/org4/local_d1.json" ] && [ -d "$CLAUDE_SWITCH_HOME/profiles/$D" ]'
 echo '{"op":"switch","step":"started"}' > "$CLAUDE_SWITCH_HOME/journal.json"
@@ -215,11 +220,32 @@ check "removal is in the log" 'grep -q "removed account $D" "$CLAUDE_SWITCH_HOME
 E sync >/dev/null
 check "sync does not bring the folder back" '[ ! -e "$S/$D" ]'
 check "backups lists the removed account" 'E backups | grep -q "\"name\": \"$bk\""'
+kinds() { E backups | /usr/bin/python3 -c "
+import json,sys
+for b in json.load(sys.stdin)['backups']: print(b['name'], b.get('kind'), b.get('account', '-'), b.get('time', '-'))"; }
+check "backup kind: removed, with account and time" 'kinds | grep -qE "^$bk removed DDDDDDDD [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"'
+check "backup kind: daily" 'kinds | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2} daily - [0-9]{4}-[0-9]{2}-[0-9]{2}$"'
+check "backup kind: pre-restore" 'kinds | grep -qE "^pre-restore-[0-9-]+ pre-restore - [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"'
 o_before="$(others)"
 E restore "$bk" >/dev/null
 check "restore brings the sessions back" '[ -f "$S/$D/org4/local_d1.json" ] && [ -f "$S/$D/org4/local_d2.json" ]'
 check "...and keeps the other accounts" '[ "$(others)" = "$o_before" ]'
 check "...and the account is not mine" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"$D\" and not a[\"owned\"] and not a[\"savedLogin\"]] else 1)"'
+
+echo "restore of a removed account keeps newer session files"
+F=FFFFFFFF-5; mkdir -p "$S/$F/org5"
+for i in 1 2 3; do echo "{\"v\":\"backup-$i\"}" > "$S/$F/org5/local_f$i.json"; done
+touch -t 202601010000 "$S/$F/org5/"*.json
+bk="$(E remove FFFFFFFF | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['backup'])")"
+mkdir -p "$S/$F/org5"  # the user signed in again: Claude made new files
+echo '{"v":"new"}' > "$S/$F/org5/local_f1.json"
+echo '{"v":"old"}' > "$S/$F/org5/local_f2.json"; touch -t 202501010000 "$S/$F/org5/local_f2.json"
+out="$(E restore "$bk")"
+check "a newer file is not overwritten" 'grep -q new "$S/$F/org5/local_f1.json"'
+check "an older file is updated" 'grep -q backup-2 "$S/$F/org5/local_f2.json"'
+check "a missing file comes back" 'grep -q backup-3 "$S/$F/org5/local_f3.json"'
+undo="$(echo "$out" | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['undo'])")"
+check "there is an undo backup" '[ -n "$undo" ] && grep -q new "$CLAUDE_SWITCH_BACKUPS/$undo/$F/org5/local_f1.json"'
 
 echo "sign in to save (save-login)"
 mkdir -p "$A/claude-code-sessions/DDDDDDDD-4/org4"
@@ -231,6 +257,15 @@ check "other account signed in: mismatch" 'echo "$out" | grep -q "\"match\": fal
 check "...and the message names the signed-in account" 'echo "$out" | grep -q "BBBBBBBB-2"'
 check "...and no login saved for the picked account" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4" ]'
 login_as DDDDDDDD-4 cookieD
+/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(2)" & holder=$!
+sleep 0.5
+out="$(E save-login DDDDDDDD)"; rc=$?
+check "lock busy (the 5-minute tick): not an error, busy" '[ "$rc" = 0 ] && echo "$out" | grep -q "\"busy\": true" && echo "$out" | grep -q "\"saved\": false"'
+check "...and nothing saved yet" '[ ! -d "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4" ]'
+wait $holder
+echo '{"op":"switch","step":"loaded"}' > "$CLAUDE_SWITCH_HOME/journal.json"
+check "unfinished switch: busy, not an error" 'E save-login DDDDDDDD | grep -q "\"busy\": true"'
+rm "$CLAUDE_SWITCH_HOME/journal.json"
 out="$(E save-login DDDDDDDD)"
 check "picked account signed in: saved" 'echo "$out" | grep -q "\"saved\": true"'
 check "...and the login is in the profile" '[ -f "$CLAUDE_SWITCH_HOME/profiles/DDDDDDDD-4/meta.json" ]'
@@ -279,10 +314,17 @@ E label "${IA:0:8}" "alex@example.com" >/dev/null
 out="$(E report)"
 check "report has no email and no ID (the pass check)" '[ "$(echo "$out" | grep -cE "[0-9a-f]{8}-[0-9a-f]{4}|@")" = 0 ]'
 check "known email gets its account placeholder" 'echo "$out" | grep -q "note account 2 and account 3"'
+echo "2026-11-01 10:00:06 label email alex@example.com, id $IA" >> "$R/home/switch.log"
+pair="$(E report | sed -n 's/.*label email \(account [0-9]*\), id \(account [0-9]*\)$/\1|\2/p')"
+check "account named by its email in the app: email and ID get the same placeholder" '[ -n "$pair" ] && [ "${pair%|*}" = "${pair#*|}" ]'
 check "labels are not in the report" '! echo "$out" | grep -qi alex'
 check "home folder shown as ~" 'echo "$out" | grep -q "backup -> ~/Backups" && ! echo "$out" | grep -q "$R"'
 check "another user folder shown as ~" '! echo "$out" | grep -q "demo.user"'
 check "report has versions, layout, settings" 'echo "$out" | grep -q "Claude version:" && echo "$out" | grep -q "Layout check:" && echo "$out" | grep -q "syncOnSwitch"'
+check "report from Terminal points to the app for shortcuts" 'echo "$out" | grep -q "shortcut settings: see the app"'
+out="$(E report --app-setting shortcutOpenPanel=on --app-setting shortcutNextAccount=off)"
+check "report from the app lists the shortcut states" 'echo "$out" | grep -q "  shortcutOpenPanel: on" && echo "$out" | grep -q "  shortcutNextAccount: off" && ! echo "$out" | grep -q "see the app"'
+check "app settings must be key=value words" '! E report --app-setting "x=1 y" >/dev/null'
 for i in $(seq 1 300); do echo "2026-11-02 10:00:00 line $i"; done >> "$R/home/switch.log"
 check "only the last 200 log lines" '[ "$(E report | grep -c "  2026-")" = 200 ] && E report | grep -q "line 300" && ! E report | grep -q "line 100$"'
 
