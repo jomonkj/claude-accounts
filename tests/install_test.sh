@@ -34,17 +34,46 @@ find "$T/q/Claude Accounts.app" -print0 | xargs -0 xattr -w com.apple.quarantine
 run --app "$T/q/Claude Accounts.app"
 check "quarantine flag removed from every file" '! find "$H/Applications/Claude Accounts.app" -print0 | xargs -0 xattr | grep -q quarantine'
 
-echo "download"
+echo "download with curl, no gh"
+# A file:// folder that acts as the GitHub API, with two releases.
+API="$T/api/repos/jomonkj/claude-accounts/releases"; mkdir -p "$API/tags"
+release() { # <tag>: zip + sha256 in $T/dl/<tag>, and its API entry
+  local d="$T/dl/$1"; mkdir -p "$d"
+  ditto -c -k --keepParent "$APP" "$d/Claude-Accounts-$1.zip"
+  (cd "$d" && shasum -a 256 "Claude-Accounts-$1.zip" > "Claude-Accounts-$1.zip.sha256")
+  echo "{\"tag_name\":\"$1\",\"assets\":[
+    {\"name\":\"Claude-Accounts-$1.zip\",\"browser_download_url\":\"file://$d/Claude-Accounts-$1.zip\"},
+    {\"name\":\"Claude-Accounts-$1.zip.sha256\",\"browser_download_url\":\"file://$d/Claude-Accounts-$1.zip.sha256\"}]}" \
+    > "$API/tags/$1"; }
+release v9.9.9; release v1.0.0; cp "$API/tags/v9.9.9" "$API/latest"
+export CLAUDE_ACCOUNTS_API="file://$T/api"
+rm -rf "$H"; mv "$T/bin/gh" "$T/gh.off"
+run
+check "good download installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ]'
+check "...from the latest release" 'grep -q "Downloading the latest release" "$T/out" && ! grep -q "Trying gh" "$T/out"'
+
+rm -rf "$H"; mv "$T/dl/v9.9.9" "$T/dl/v9.9.9.off"
+run --tag v1.0.0
+check "--tag installs that release" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ]'
+mv "$T/dl/v9.9.9.off" "$T/dl/v9.9.9"
+
+rm -rf "$H"; printf x >> "$T/dl/v9.9.9/Claude-Accounts-v9.9.9.zip"
+run; code=$?
+check "damaged download stops" '[ $code != 0 ] && grep -q "Checksum does not match" "$T/out"'
+check "damaged download installs nothing" '[ ! -e "$H/Applications/Claude Accounts.app" ]'
+
+rm -rf "$H"; echo '{"tag_name":"v9.9.9","assets":[]}' > "$API/latest"
+run; code=$?
+check "release with no zip stops (no gh)" '[ $code != 0 ] && grep -q "no app zip" "$T/out" && [ ! -e "$H/Applications/Claude Accounts.app" ]'
+
+echo "download with the gh fallback"
+mv "$T/gh.off" "$T/bin/gh"; export CLAUDE_ACCOUNTS_API="file://$T/no-api"
 rm -rf "$H"
 ditto -c -k --keepParent "$APP" "$T/rel/Claude-Accounts-v9.9.9.zip"
 (cd "$T/rel" && shasum -a 256 Claude-Accounts-v9.9.9.zip > Claude-Accounts-v9.9.9.zip.sha256)
 run
-check "good download installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ]'
-
-rm -rf "$H"; printf x >> "$T/rel/Claude-Accounts-v9.9.9.zip"
-run; code=$?
-check "damaged download stops" '[ $code != 0 ] && grep -q "Checksum does not match" "$T/out"'
-check "damaged download installs nothing" '[ ! -e "$H/Applications/Claude Accounts.app" ]'
+check "curl fails, gh installs" '[ -x "$H/Applications/Claude Accounts.app/Contents/MacOS/ClaudeAccounts" ] && grep -q "Trying gh" "$T/out"'
+unset CLAUDE_ACCOUNTS_API
 
 echo "uninstall"
 rm -rf "$H" "$T/called"

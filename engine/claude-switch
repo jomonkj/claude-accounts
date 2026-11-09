@@ -28,7 +28,7 @@ Commands (all print JSON unless noted):
   pin|unpin <account>         pin an account to the top of the panel
   set <key> <value>           change a setting (true/false or a number)
   open-session <session-id>   open a session in Claude
-  update-check <version>      is a newer GitHub Release out? (uses gh)
+  update-check <version>      is a newer GitHub Release out? (curl; gh only as a fallback)
   update-install <tag>        download, check and install a release, then reopen the app
   uninstall                   remove the app, the login item and the CLI links (keeps saved logins and backups)
   report [--app-setting k=v]  debug report as text, with no emails and no account IDs
@@ -58,6 +58,11 @@ TEST = bool(os.environ.get("CLAUDE_SWITCH_TEST"))
 CLAUDE_BIN = "/Applications/Claude.app/Contents/MacOS/Claude"
 BUNDLE_ID = "com.anthropic.claudefordesktop"
 REPO = os.environ.get("CLAUDE_ACCOUNTS_REPO", "jomonkj/claude-accounts")
+# Updates: the public GitHub API with curl (no sign-in). gh is only a fallback.
+# CLAUDE_ACCOUNTS_API is a test seam: tests point it to a file:// folder.
+API = os.environ.get("CLAUDE_ACCOUNTS_API", "https://api.github.com").rstrip("/")
+CURL = "/usr/bin/curl"
+CURL_PROTO = "=https,file" if API.startswith("file://") else "=https"
 GH = os.environ.get("CLAUDE_SWITCH_GH") or shutil.which("gh", path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin") or "gh"
 
 LOGIN_FILES = ["Cookies", "Cookies-journal"]
@@ -1065,20 +1070,55 @@ def version_tuple(v):
     return tuple(int(n) for n in nums[:3]) + (0,) * (3 - len(nums[:3]))
 
 
-def update_check(current):
-    """Latest release vs. the running version. Never fails: problems come back as `error`."""
+def _curl(url, out=None, timeout=30):
+    """Fetch a URL with the system curl (no sign-in). Returns the body, or None with `out`. Raises Fail."""
+    cmd = [CURL, "-fsSL", "--proto", CURL_PROTO, "--proto-redir", "=https", "--max-time", str(timeout),
+           "-H", "Accept: application/vnd.github+json", url] + (["-o", out] if out else [])
     try:
-        r = subprocess.run([GH, "release", "view", "--repo", REPO, "--json", "tagName,url,publishedAt"],
-                           capture_output=True, text=True, timeout=30)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10)
     except (OSError, subprocess.TimeoutExpired) as e:
-        return {"available": False, "error": f"gh is not available: {e}"}
+        raise Fail(f"curl: {e}")
     if r.returncode != 0:
-        msg = (r.stderr or r.stdout).strip().splitlines()
-        return {"available": False, "error": msg[-1] if msg else "gh failed"}
-    rel = json.loads(r.stdout)
-    latest = rel.get("tagName", "")
+        raise Fail(r.stderr.strip() or f"curl: exit {r.returncode}")
+    return None if out else r.stdout
+
+
+def _release(tag=None):
+    """A release from the public GitHub API: latest, or the one with `tag`. Raises Fail."""
+    body = _curl(f"{API}/repos/{REPO}/releases/" + (f"tags/{tag}" if tag else "latest"))
+    try:
+        rel = json.loads(body)
+    except ValueError:
+        raise Fail("The release API did not return JSON")
+    if not isinstance(rel, dict) or not rel.get("tag_name"):
+        raise Fail("The release API returned no tag")
+    return rel
+
+
+def _gh_error(r):
+    msg = (r.stderr or r.stdout).strip().splitlines()
+    return msg[-1] if msg else "gh failed"
+
+
+def update_check(current):
+    """Latest release vs. the running version. Never fails: problems come back as `error`.
+
+    Uses the public GitHub API with curl. gh is only a fallback, for when curl fails."""
+    try:
+        rel = _release()
+        latest, url = rel["tag_name"], rel.get("html_url", "")
+    except Fail as e:
+        try:
+            r = subprocess.run([GH, "release", "view", "--repo", REPO, "--json", "tagName,url,publishedAt"],
+                               capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            return {"available": False, "error": str(e)}
+        if r.returncode != 0:
+            return {"available": False, "error": f"{e}; gh: {_gh_error(r)}"}
+        rel = json.loads(r.stdout)
+        latest, url = rel.get("tagName", ""), rel.get("url", "")
     newer = version_tuple(latest) > version_tuple(current)
-    return {"available": newer, "latest": latest, "current": current, "url": rel.get("url", "")}
+    return {"available": newer, "latest": latest, "current": current, "url": url}
 
 
 def update_install(tag):
@@ -1088,18 +1128,29 @@ def update_install(tag):
     work = os.path.join(BASE, "update")
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
-    r = subprocess.run([GH, "release", "download", tag, "--repo", REPO, "--pattern", "install-release.sh",
-                        "--dir", work], capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        raise Fail("Cannot download the release: " + (r.stderr or r.stdout).strip())
     script = os.path.join(work, "install-release.sh")
+    try:
+        assets = {a.get("name"): a.get("browser_download_url") for a in _release(tag).get("assets", [])}
+        if not assets.get("install-release.sh"):
+            raise Fail(f"Release {tag} has no install-release.sh")
+        _curl(assets["install-release.sh"], out=script, timeout=120)
+    except Fail as e:
+        try:
+            r = subprocess.run([GH, "release", "download", tag, "--repo", REPO, "--pattern", "install-release.sh",
+                                "--dir", work], capture_output=True, text=True, timeout=120)
+        except (OSError, subprocess.TimeoutExpired):
+            raise Fail(f"Cannot download the release: {e}")
+        if r.returncode != 0:
+            raise Fail(f"Cannot download the release: {e}; gh: {_gh_error(r)}")
     log(f"update to {tag}")
     if TEST:
         return {"ok": True, "tag": tag, "script": script}
     # Run detached: the installer stops this app, replaces it, and opens the new version.
+    path = "/usr/bin:/bin:/usr/sbin:/sbin"
+    if os.path.isabs(GH):
+        path = f"{os.path.dirname(GH)}:{path}"  # for the installer's gh fallback
     subprocess.Popen(["/bin/bash", script, "--tag", tag], stdout=open(os.path.join(work, "install.log"), "w"),
-                     stderr=subprocess.STDOUT, start_new_session=True,
-                     env={**os.environ, "PATH": f"{os.path.dirname(GH)}:/usr/bin:/bin:/usr/sbin:/sbin"})
+                     stderr=subprocess.STDOUT, start_new_session=True, env={**os.environ, "PATH": path})
     return {"ok": True, "tag": tag}
 
 

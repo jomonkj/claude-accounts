@@ -56,21 +56,38 @@ New in 1.1:
 
 ## Install
 
-Needs macOS 14 or later and the [GitHub CLI](https://cli.github.com) (`brew install gh`, then `gh auth login`).
+Needs macOS 14 or later. No GitHub account or GitHub CLI is needed.
+
+**By hand:**
+
+1. Download `Claude-Accounts-<version>.zip` from the [latest release](https://github.com/jomonkj/claude-accounts/releases/latest).
+2. Unzip it and move **Claude Accounts** to Applications.
+3. The first time, **right-click the app → Open → Open**. The app is not notarized, so a double-click does not open it the first time.
+
+**With one command:**
 
 ```bash
-gh release download --repo jomonkj/claude-accounts --pattern install-release.sh --output - | bash
+curl -fsSL https://github.com/jomonkj/claude-accounts/releases/latest/download/install-release.sh | bash
 ```
 
-The install script:
+To read the script first, open [install-release.sh](scripts/install-release.sh). The install script:
 
-1. Downloads the latest release and checks its sha256.
+1. Downloads the latest release from the public GitHub API and checks its sha256.
 2. Installs the app to `~/Applications`.
 3. Removes the quarantine flag from the app.
 4. Links the CLI commands into `~/.local/bin`.
 5. Adds the login item and opens the app.
 
-**Why the script removes the quarantine flag:** the app is not notarized by Apple. Notarization needs a paid Apple Developer account. Without it, macOS blocks a downloaded app that has the quarantine flag and says that it "cannot be opened". The script removes the flag only from this app, after it checks the sha256 of the download. If you prefer to do it by hand: download the zip from the Releases page, move the app to Applications, then **right-click it → Open → Open** the first time.
+**Why the script removes the quarantine flag:** the app is not notarized by Apple. Notarization needs a paid Apple Developer account. Without it, macOS blocks a downloaded app that has the quarantine flag and says that it "cannot be opened". The script removes the flag only from this app, after it checks the sha256 of the download. If you prefer to do it by hand, use the steps above.
+
+## How it stores logins
+
+- **What it saves.** For each account, the app copies the login files of the Claude desktop app: `Cookies`, `Local Storage`, `Session Storage`, `IndexedDB`, `WebStorage`, and two keys from Claude's `config.json` (`oauth:tokenCacheV2`, `lastKnownAccountUuid`).
+- **Where.** In `~/Library/Application Support/Claude Account Switcher/profiles/<account>`, one folder per account. Only your macOS user can read these folders.
+- **No decryption.** The app copies the files as they are. It does not read your Keychain and does not decrypt cookies or tokens.
+- **No password.** You sign in to Claude in the Claude app. The app never sees your password.
+- **No network, except updates.** The app connects only to the public GitHub API, one time each day, to check for a new release. It sends no account data.
+- **Delete a login.** `claude-switch forget <account>` deletes the saved login of one account. Settings → Accounts → Remove removes the whole account.
 
 **Updates:** the app checks GitHub Releases once a day. When a new version exists, the panel shows **Update**.
 
