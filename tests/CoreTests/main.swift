@@ -197,6 +197,11 @@ func main() async {
         check("sign-in result: mismatch is a warning with the engine message", t.contains("different account"))
     } else { check("sign-in result: mismatch is a warning with the engine message", false) }
 
+    print("Debug report")
+    check("report arguments carry the shortcut states",
+          Status.reportArguments(appSettings: [("shortcutOpenPanel", true), ("shortcutNextAccount", false)])
+          == ["report", "--app-setting", "shortcutOpenPanel=on", "--app-setting", "shortcutNextAccount=off"])
+
     print("Account")
     let b = s.account(B)!
     check("short title is first word", b.shortTitle == "jomon")

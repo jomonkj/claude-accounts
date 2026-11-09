@@ -121,6 +121,12 @@ public extension Status {
 
     var ownedAccounts: [Account] { accounts.filter(\.owned) }
 
+    /// Engine arguments for the debug report. The app adds the settings only it knows
+    /// (the keyboard shortcuts), as on/off.
+    static func reportArguments(appSettings: [(String, Bool)]) -> [String] {
+        ["report"] + appSettings.flatMap { ["--app-setting", "\($0.0)=\($0.1 ? "on" : "off")"] }
+    }
+
     /// Lines for the sync preview, for example "jomon@example.com: 16 sessions". Accounts with 0 changes are left out.
     func syncPreview(_ r: SyncResult) -> [String] {
         r.accounts.filter { $0.value > 0 }

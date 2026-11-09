@@ -315,6 +315,10 @@ check "labels are not in the report" '! echo "$out" | grep -qi alex'
 check "home folder shown as ~" 'echo "$out" | grep -q "backup -> ~/Backups" && ! echo "$out" | grep -q "$R"'
 check "another user folder shown as ~" '! echo "$out" | grep -q "demo.user"'
 check "report has versions, layout, settings" 'echo "$out" | grep -q "Claude version:" && echo "$out" | grep -q "Layout check:" && echo "$out" | grep -q "syncOnSwitch"'
+check "report from Terminal points to the app for shortcuts" 'echo "$out" | grep -q "shortcut settings: see the app"'
+out="$(E report --app-setting shortcutOpenPanel=on --app-setting shortcutNextAccount=off)"
+check "report from the app lists the shortcut states" 'echo "$out" | grep -q "  shortcutOpenPanel: on" && echo "$out" | grep -q "  shortcutNextAccount: off" && ! echo "$out" | grep -q "see the app"'
+check "app settings must be key=value words" '! E report --app-setting "x=1 y" >/dev/null'
 for i in $(seq 1 300); do echo "2026-11-02 10:00:00 line $i"; done >> "$R/home/switch.log"
 check "only the last 200 log lines" '[ "$(E report | grep -c "  2026-")" = 200 ] && E report | grep -q "line 300" && ! E report | grep -q "line 100$"'
 
