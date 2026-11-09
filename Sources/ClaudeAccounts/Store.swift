@@ -16,6 +16,7 @@ final class Store: ObservableObject {
     private var lastUpdateCheck = Date.distantPast
     static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
     private var windows: [String: NSWindow] = [:]
+    private var windowObservers: [String: NSObjectProtocol] = [:]
 
     let engine: EngineClient
     let notifier = Notifier()
@@ -373,10 +374,23 @@ final class Store: ObservableObject {
         w.center()
         w.makeKeyAndOrderFront(nil)
         windows[id] = w
+        windowObservers[id] = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: w, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.windowClosed(id) }
+        }
+    }
+
+    /// A closed window is freed, not kept for the next open: its SwiftUI views and their
+    /// caches are most of the memory the app uses (issue #22). The next open builds it again.
+    private func windowClosed(_ id: String) {
+        if let o = windowObservers.removeValue(forKey: id) { NotificationCenter.default.removeObserver(o) }
+        guard let w = windows.removeValue(forKey: id) else { return }
+        // Tear down the view tree after AppKit has finished closing the window.
+        DispatchQueue.main.async { w.contentViewController = nil }
     }
 
     func showSettings(tab: String = "general") {
-        windows["settings"]?.close(); windows["settings"] = nil
+        windows["settings"]?.close()
         open("settings", title: "Claude Accounts Settings", SettingsView(tab: tab))
     }
 
