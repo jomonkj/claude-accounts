@@ -590,28 +590,40 @@ def restore(name):
     with lock():
         running = claude_running()
         quit_claude()
-        undo = f"pre-restore-{datetime.datetime.now():%Y%m%d-%H%M%S}"
-        subprocess.run(["rsync", "-a", SESS + "/", os.path.join(BACKUPS, undo) + "/"], check=True)
+        undo = pre_restore_backup()
         subprocess.run(["rsync", "-a", "--delete", os.path.join(BACKUPS, name) + "/", SESS + "/"], check=True)
-        pre = sorted(d for d in os.listdir(BACKUPS) if d.startswith("pre-restore-"))
-        for old in pre[:-3]:
-            shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
         if running:
             open_claude()
     log(f"restored backup {name} (undo: {undo})")
     return {"ok": True, "restored": name, "undo": undo}
 
 
+def pre_restore_backup():
+    """Copy the session lists to a "pre-restore-…" backup (the undo of a restore). Keeps the last 3."""
+    undo = f"pre-restore-{datetime.datetime.now():%Y%m%d-%H%M%S}"
+    os.makedirs(BACKUPS, exist_ok=True)
+    if os.path.isdir(SESS):
+        subprocess.run(["rsync", "-a", SESS + "/", os.path.join(BACKUPS, undo) + "/"], check=True)
+    pre = sorted(d for d in os.listdir(BACKUPS) if d.startswith("pre-restore-"))
+    for old in pre[:-3]:
+        shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
+    return undo
+
+
 def restore_removed(name):
     """Put the session folder of a removed account back. Other accounts are not touched.
-    The account comes back as "not mine" and without a saved login."""
+    The account comes back as "not mine" and without a saved login. A file that is newer
+    in Claude (the user signed in to the account again) is kept: only missing and older
+    files are copied."""
     src = os.path.join(BACKUPS, name)
     with lock():
+        undo = pre_restore_backup()
         for acc in os.listdir(src):
             if os.path.isdir(os.path.join(src, acc)):
-                subprocess.run(["rsync", "-a", os.path.join(src, acc) + "/", os.path.join(SESS, acc) + "/"], check=True)
-    log(f"restored removed account from backup {name}")
-    return {"ok": True, "restored": name, "undo": ""}
+                subprocess.run(["rsync", "-a", "--update", os.path.join(src, acc) + "/", os.path.join(SESS, acc) + "/"],
+                               check=True)
+    log(f"restored removed account from backup {name} (undo: {undo})")
+    return {"ok": True, "restored": name, "undo": undo}
 
 
 def backup(keep):

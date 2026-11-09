@@ -221,6 +221,21 @@ check "restore brings the sessions back" '[ -f "$S/$D/org4/local_d1.json" ] && [
 check "...and keeps the other accounts" '[ "$(others)" = "$o_before" ]'
 check "...and the account is not mine" 'E status | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if [a for a in d[\"accounts\"] if a[\"id\"]==\"$D\" and not a[\"owned\"] and not a[\"savedLogin\"]] else 1)"'
 
+echo "restore of a removed account keeps newer session files"
+F=FFFFFFFF-5; mkdir -p "$S/$F/org5"
+for i in 1 2 3; do echo "{\"v\":\"backup-$i\"}" > "$S/$F/org5/local_f$i.json"; done
+touch -t 202601010000 "$S/$F/org5/"*.json
+bk="$(E remove FFFFFFFF | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['backup'])")"
+mkdir -p "$S/$F/org5"  # the user signed in again: Claude made new files
+echo '{"v":"new"}' > "$S/$F/org5/local_f1.json"
+echo '{"v":"old"}' > "$S/$F/org5/local_f2.json"; touch -t 202501010000 "$S/$F/org5/local_f2.json"
+out="$(E restore "$bk")"
+check "a newer file is not overwritten" 'grep -q new "$S/$F/org5/local_f1.json"'
+check "an older file is updated" 'grep -q backup-2 "$S/$F/org5/local_f2.json"'
+check "a missing file comes back" 'grep -q backup-3 "$S/$F/org5/local_f3.json"'
+undo="$(echo "$out" | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['undo'])")"
+check "there is an undo backup" '[ -n "$undo" ] && grep -q new "$CLAUDE_SWITCH_BACKUPS/$undo/$F/org5/local_f1.json"'
+
 echo "sign in to save (save-login)"
 mkdir -p "$A/claude-code-sessions/DDDDDDDD-4/org4"
 login_as BBBBBBBB-2 cookieB; E add >/dev/null
