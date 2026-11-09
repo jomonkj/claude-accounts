@@ -192,9 +192,14 @@ o_before="$(others)"
 check "remove the current account is refused" '! E remove "$cur" >/dev/null && grep -q "current account" "$T/err"'
 check "...and its folder stays" '[ -d "$S/$cur" ]'
 check "remove an unknown account fails" '! E remove EEEE >/dev/null && grep -q Unknown "$T/err"'
-/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(2)" & holder=$!
+/usr/bin/python3 -c "import fcntl,time;f=open('$CLAUDE_SWITCH_HOME/lock','w');fcntl.flock(f,fcntl.LOCK_EX);time.sleep(4)" & holder=$!
 sleep 0.5
 check "remove during a switch is refused" '! E remove DDDDDDDD >/dev/null && grep -q "Another switch" "$T/err"'
+# The checks run inside the lock: the switch may change the current account or end with a journal.
+check "current-account check waits for the lock" '! E remove "$cur" >/dev/null && grep -q "Another switch" "$T/err"'
+echo '{"op":"switch","step":"started"}' > "$CLAUDE_SWITCH_HOME/journal.json"
+check "pending-recovery check waits for the lock" '! E remove DDDDDDDD >/dev/null && grep -q "Another switch" "$T/err"'
+rm "$CLAUDE_SWITCH_HOME/journal.json"
 wait $holder
 check "...and changes nothing" '[ -f "$S/$D/org4/local_d1.json" ] && [ -d "$CLAUDE_SWITCH_HOME/profiles/$D" ]'
 echo '{"op":"switch","step":"started"}' > "$CLAUDE_SWITCH_HOME/journal.json"

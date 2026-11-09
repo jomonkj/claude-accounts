@@ -897,10 +897,10 @@ def finish_remove(j):
 
 def remove(acc):
     acc = resolve(acc)
-    require_no_pending()
-    if acc == current_account():
-        raise Fail("This is the current account of Claude. Switch to another account first, then remove it.")
-    with lock():
+    with lock():  # check inside the lock: a running switch changes the current account
+        require_no_pending()
+        if acc == current_account():
+            raise Fail("This is the current account of Claude. Switch to another account first, then remove it.")
         log(f"remove account {acc}")
         name = f"removed-{datetime.datetime.now():%Y%m%d-%H%M%S}-{acc[:8]}"
         dest = os.path.join(BACKUPS, name)
