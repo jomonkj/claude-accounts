@@ -59,7 +59,9 @@ echo '{}' > "$H/Backups/claude-sessions/2026-01-01/local_a1.json"
 rm -f "$T/called"
 uninstall() { # [command prefix...]: run the installed CLI link in test mode
   "$@" env HOME="$H" CLAUDE_SWITCH_TEST=1 CLAUDE_INFO_PLIST="$T/none.plist" PATH="$T/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-    "$H/.local/bin/claude-switch" uninstall >"$T/out" 2>&1; }
+    CLAUDE_SWITCH_APPLICATIONS="$T/sysapps" "${ENGINE:-$H/.local/bin/claude-switch}" uninstall >"$T/out" 2>&1; }
+# A second copy in /Applications (test seam: $T/sysapps), for example from a drag-install.
+mkdir -p "$T/sysapps"; cp -R "$APP" "$T/sysapps/"
 hold_lock() { /usr/bin/python3 -c "import fcntl,subprocess,sys;f=open(sys.argv[1],'w');fcntl.flock(f,fcntl.LOCK_EX);sys.exit(subprocess.call(sys.argv[2:]))" "$DATA/lock" "$@"; }
 uninstall hold_lock; code=$?
 check "refused while a switch runs" '[ $code != 0 ] && grep -q "Another switch is running" "$T/out"'
@@ -68,6 +70,8 @@ uninstall; code=$?
 check "uninstall succeeds" '[ $code = 0 ]'
 check "no app" '[ ! -e "$H/Applications/Claude Accounts.app" ]'
 check "app is in the Trash" '[ -d "$H/.Trash/Claude Accounts.app" ]'
+check "the copy in /Applications is removed too" '[ ! -e "$T/sysapps/Claude Accounts.app" ] && [ "$(ls "$H/.Trash" | grep -c "Claude Accounts")" = 2 ]'
+check "the result lists both app copies" 'grep -qF "$H/Applications/Claude Accounts.app" "$T/out" && grep -qF "$T/sysapps/Claude Accounts.app" "$T/out"'
 check "no LaunchAgent" '[ ! -e "$H/Library/LaunchAgents/local.claude-accounts.plist" ]'
 check "no CLI links" '[ ! -L "$H/.local/bin/claude-switch" ] && [ ! -L "$H/.local/bin/claude-accounts" ]'
 check "data folder remains" '[ -f "$DATA/profiles/$ACC/meta.json" ]'
@@ -75,5 +79,28 @@ check "backups remain" '[ -f "$H/Backups/claude-sessions/2026-01-01/local_a1.jso
 check "prints where data and backups are" 'grep -qF "\"data\": \"$DATA\"" "$T/out" && grep -qF "\"backups\": \"$H/Backups/claude-sessions\"" "$T/out"'
 check "stops login item and app through the test stub" 'grep -qE "\"stubbed\": \[\"launchctl bootout gui/[0-9]+/local.claude-accounts\", \"pkill -x ClaudeAccounts\"\]" "$T/out"'
 check "no real launchctl, pkill or osascript call" '[ ! -e "$T/called" ]'
+
+echo "uninstall of an app that runs from another folder"
+rm -rf "$H" "$T/sysapps"; mkdir -p "$T/sysapps" "$T/elsewhere"
+run --app "$APP"
+cp -R "$APP" "$T/elsewhere/"
+cp "$ROOT/engine/claude-switch" "$T/elsewhere/Claude Accounts.app/Contents/Resources/claude-switch"
+ENGINE="$T/elsewhere/Claude Accounts.app/Contents/Resources/claude-switch" uninstall; code=$?
+check "uninstall succeeds" '[ $code = 0 ] && grep -q "\"ok\": true" "$T/out"'
+check "the running app's own bundle is removed" '[ ! -e "$T/elsewhere/Claude Accounts.app" ]'
+check "...and the copy in ~/Applications" '[ ! -e "$H/Applications/Claude Accounts.app" ]'
+check "...and both are listed" 'grep -qF "$T/elsewhere/Claude Accounts.app" "$T/out" && grep -qF "$H/Applications/Claude Accounts.app" "$T/out"'
+
+echo "uninstall when an app copy cannot be removed"
+rm -rf "$H"; mkdir -p "$T/sysapps"
+run --app "$APP"
+cp "$ROOT/engine/claude-switch" "$H/Applications/Claude Accounts.app/Contents/Resources/claude-switch"
+cp -R "$APP" "$T/sysapps/"; chmod 555 "$T/sysapps"
+uninstall; code=$?
+chmod 755 "$T/sysapps"
+check "not reported as success" '[ $code != 0 ] && ! grep -q "\"ok\": true" "$T/out"'
+check "says which copy remains" 'grep -qF "$T/sysapps/Claude Accounts.app" "$T/out" && grep -qi "still" "$T/out"'
+check "says what it removed" 'grep -qF "$H/Applications/Claude Accounts.app" "$T/out"'
+check "the other parts are removed" '[ ! -e "$H/Applications/Claude Accounts.app" ] && [ ! -L "$H/.local/bin/claude-switch" ] && [ ! -e "$H/Library/LaunchAgents/local.claude-accounts.plist" ]'
 
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]

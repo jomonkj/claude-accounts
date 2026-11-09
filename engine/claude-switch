@@ -1079,14 +1079,15 @@ AGENT_LABEL = "local.claude-accounts"
 def uninstall():
     """Remove the app, the login item and the CLI links. Keep the data folder and the backups.
 
-    The paths are the ones install-release.sh writes, always under $HOME. In test mode the steps
-    that act outside $HOME (launchctl, pkill, the Finder Trash) are not run: they are listed in
-    `stubbed`, and the app goes to $HOME/.Trash.
+    The app copies: ~/Applications (install-release.sh), /Applications (a drag-install) and the
+    bundle this engine runs from. In test mode the steps that act outside $HOME (launchctl, pkill,
+    the Finder Trash) are not run: they are listed in `stubbed`, and the app goes to $HOME/.Trash.
+    If an app copy cannot be removed, the result is an error that names it and lists what was removed.
     """
     import pwd
     if TEST and os.path.realpath(HOME) == os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir):
         raise Fail("Test mode needs a temporary HOME. Nothing was changed.")
-    app = os.path.join(HOME, "Applications", "Claude Accounts.app")
+    apps = app_copies()
     agent = os.path.join(HOME, "Library", "LaunchAgents", AGENT_LABEL + ".plist")
     stop = [["/bin/launchctl", "bootout", f"gui/{os.getuid()}/{AGENT_LABEL}"], ["/usr/bin/pkill", "-x", "ClaudeAccounts"]]
     with lock():
@@ -1099,9 +1100,16 @@ def uninstall():
                 os.remove(link); removed.append(link)
         if os.path.exists(agent):
             os.remove(agent); removed.append(agent)
-        if os.path.isdir(app):
-            trash_item(app); removed.append(app)
+        remaining = []
+        for app in apps:
+            try:
+                trash_item(app); removed.append(app)
+            except Fail as e:
+                remaining.append(app); log(f"uninstall: {e}")
         log("uninstalled: " + ", ".join(removed))
+    if remaining:  # the app is still there: do not stop it, and do not say it is gone
+        raise Fail("Not finished. These app copies are still there: " + ", ".join(remaining)
+                   + ". Move them to the Trash yourself. Removed: " + (", ".join(removed) or "nothing") + ".")
     out = {"ok": True, "removed": removed, "data": BASE, "backups": BACKUPS}
     if TEST:
         out["stubbed"] = [" ".join([os.path.basename(c[0])] + c[1:]) for c in stop]
@@ -1115,11 +1123,44 @@ def uninstall():
     return None
 
 
+APP_NAME = "Claude Accounts.app"
+
+
+def own_bundle():
+    """The app bundle this engine runs from (Contents/Resources/claude-switch), or None."""
+    res = os.path.dirname(os.path.realpath(__file__))
+    bundle = os.path.dirname(os.path.dirname(res))
+    if os.path.basename(res) != "Resources" or not bundle.endswith(".app"):
+        return None
+    with contextlib.suppress(OSError, plistlib.InvalidFileException, ValueError):
+        with open(os.path.join(bundle, "Contents", "Info.plist"), "rb") as f:
+            if plistlib.load(f).get("CFBundleIdentifier") == AGENT_LABEL:  # our bundle ID
+                return bundle
+    return None
+
+
+def app_copies():
+    """Every copy of the app to remove, without duplicates."""
+    system = os.environ.get("CLAUDE_SWITCH_APPLICATIONS", "/Applications") if TEST else "/Applications"
+    out = []
+    for p in (os.path.join(HOME, "Applications", APP_NAME), os.path.join(system, APP_NAME), own_bundle()):
+        if p and os.path.isdir(p) and os.path.realpath(p) not in {os.path.realpath(o) for o in out}:
+            out.append(p)
+    return out
+
+
 def trash_item(path):
     if TEST:
         trash = os.path.join(HOME, ".Trash")
         os.makedirs(trash, exist_ok=True)
-        shutil.move(path, os.path.join(trash, os.path.basename(path)))
+        dest, n = os.path.join(trash, os.path.basename(path)), 1
+        while os.path.exists(dest):
+            n += 1
+            dest = os.path.join(trash, f"{os.path.basename(path)[:-4]} {n}.app")
+        try:
+            os.rename(path, dest)
+        except OSError as e:
+            raise Fail(f"Cannot move {path} to the Trash: {e.strerror}")
         return
     # NSFileManager puts it in the Trash with "Put Back", and needs no Finder automation permission.
     js = ("ObjC.import('Foundation');var e=$();"
