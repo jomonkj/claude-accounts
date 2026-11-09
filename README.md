@@ -176,7 +176,7 @@ tests/                        engine, crash, sync, install and app logic tests
 scripts/                      build, install, screenshots, OCR check
 ```
 
-**Releases:** the release workflow (in `ci-pending/`, see its README) runs on a tag such as `v1.1.0`. It runs all tests, builds a universal app, zips it, and makes a GitHub Release.
+**Releases:** the release workflow (`.github/workflows/release.yml`) runs on a tag such as `v1.1.0`. It runs all tests, builds a universal app, zips it, and makes a GitHub Release.
 
 ## License
 
