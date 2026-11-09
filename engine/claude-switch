@@ -973,11 +973,23 @@ def save_signed_in(target):
         with lock():
             if pending():
                 raise Busy("A switch is not finished.")
-            save_login(os.path.join(PROFILES, target), "signin")
+            saved = save_live_login(target, "signin")
     except Busy:  # the tick or a switch runs now: the app asks again in a moment
         return {"ok": True, "saved": False, "waiting": True, "busy": True}
-    log(f"sign in to save: saved login of {target}")
+    if not saved:  # Claude changed account or signed out since the check above
+        return {"ok": True, "saved": False, "waiting": True}
     return {"ok": True, "saved": True, "match": True, "account": target}
+
+
+def save_live_login(acc, mode):
+    """Save the login Claude uses now (Claude may run) as the login of `acc`. Used by the tick
+    (mode "auto") and by Sign in to save ("signin"). The caller holds the lock. Saves nothing
+    during an unfinished switch or when Claude is not signed in to `acc`. True when saved."""
+    if pending() or current_account() != acc or not has_login():
+        return False
+    save_login(os.path.join(PROFILES, acc), mode)
+    log(f"saved login of {acc} ({mode})")
+    return True
 
 
 def recover():
@@ -1035,11 +1047,9 @@ def tick():
             if pending():
                 return {"done": []}  # never save a half-switched login
             cur = current_account()
-            if s["autoSaveLogins"] and cur and claude_running() and has_login():
+            if s["autoSaveLogins"] and cur and claude_running():
                 meta = profile_meta(cur)
-                if not meta or time.time() - meta.get("savedAt", 0) > 6 * 3600:
-                    save_login(os.path.join(PROFILES, cur), "auto")
-                    log(f"auto-saved login of {cur}")
+                if (not meta or time.time() - meta.get("savedAt", 0) > 6 * 3600) and save_live_login(cur, "auto"):
                     done.append("login")
             today = os.path.join(BACKUPS, f"{datetime.date.today():%Y-%m-%d}")
             if s["dailyBackup"] and not os.path.isdir(today) and os.path.isdir(SESS):
