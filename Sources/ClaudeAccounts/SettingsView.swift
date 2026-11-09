@@ -134,16 +134,7 @@ struct AccountsTab: View {
                         .labelsHidden().disabled(a.current)
                 }.width(40)
                 TableColumn("") { a in
-                    Menu {
-                        Button("Rename…") { store.rename(a) }
-                        Button(store.isPinned(a) ? "Unpin" : "Pin to top") { store.setPinned(a, !store.isPinned(a)) }
-                        if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
-                        Button("Remove account…") { store.remove(a) }.disabled(a.current)
-                        if a.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(a) } }
-                        Button("Copy account ID") {
-                            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
-                        }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    Menu { AccountMenu(account: a) } label: { Image(systemName: "ellipsis.circle") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.width(30)
             } rows: {
