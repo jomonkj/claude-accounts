@@ -49,7 +49,10 @@ New in 1.1:
 - **Copy debug report** (Settings → About). Emails and account IDs show as "account 1", "account 2".
 - **Uninstall** (Settings → About). Saved logins and backups stay.
 
-<img src="docs/screenshots/welcome-light.png" width="520" alt="First-run guide, page 1">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/welcome-dark.png">
+  <img src="docs/screenshots/welcome-light.png" width="520" alt="First-run guide, page 1">
+</picture>
 
 ## Install
 
