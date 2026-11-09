@@ -276,6 +276,10 @@ struct AboutTab: View {
         Form {
             Section("Claude Accounts") {
                 LabeledContent("Version", value: Store.version)
+                Text("Unofficial. Not made by or affiliated with Anthropic.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Text("MIT License. Copyright 2026 Jomon Johnson.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Report a problem") {
                 Text("The debug report has the app and Claude versions, the layout check, the settings and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")

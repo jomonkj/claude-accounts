@@ -226,15 +226,20 @@ final class Store: ObservableObject {
                 banner = .error(dry.output); return
             }
             guard r.changes > 0 else { banner = .info("All your accounts already have every session."); return }
-            let lines = s.syncPreview(r).map { "• " + $0 }.joined(separator: "\n")
-            let first = s.settings.syncConfirmed ? "" : "This is your first sync. Check the numbers.\n\n"
-            guard Dialog.confirm("Sync \(r.changes) sessions between your accounts?",
-                first + lines + "\n\nA backup is made first. Claude quits during the sync and opens again. Accounts that are not marked as mine are not touched.",
-                ok: "Sync") else { return }
+            let p = Self.syncPrompt(s, r)
+            guard Dialog.confirm(p.title, p.text, ok: "Sync") else { return }
             if let out = await perform("Syncing sessions…", ["sync"]) {
                 banner = .success("\(out["changes"] as? Int ?? 0) sessions synced.")
             }
         }
+    }
+
+    /// Title and text of the sync preview dialog.
+    static func syncPrompt(_ s: Status, _ r: SyncResult) -> (title: String, text: String) {
+        let lines = s.syncPreview(r).map { "• " + $0 }.joined(separator: "\n")
+        let first = s.settings.syncConfirmed ? "" : "This is your first sync. Check the numbers.\n\n"
+        return ("Sync \(r.changes) sessions between your accounts?",
+                first + lines + "\n\nA backup is made first. Claude quits during the sync and opens again. Accounts that are not marked as mine are not touched.")
     }
 
     func setOwned(_ a: Account, _ mine: Bool) {
@@ -451,10 +456,15 @@ enum LoginItem {
 enum Dialog {
     static func confirm(_ title: String, _ text: String, ok: String) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
+        return alert(title, text, ok: ok).runModal() == .alertFirstButtonReturn
+    }
+
+    /// The alert that `confirm` shows (also used by the debug render of the sync preview).
+    static func alert(_ title: String, _ text: String, ok: String) -> NSAlert {
         let a = NSAlert()
         a.messageText = title; a.informativeText = text
         a.addButton(withTitle: ok); a.addButton(withTitle: "Cancel")
-        return a.runModal() == .alertFirstButtonReturn
+        return a
     }
 
     /// A list choice. Returns the chosen index, or nil.
