@@ -1,0 +1,29 @@
+#!/bin/sh
+# Demo engine for the README screenshots (scripts/screenshots.sh). It reads and writes no files.
+# Only demo names and fake account IDs. Never ship this in a real build.
+now=$(date +%s)
+A=aaaa1111-0000-4000-8000-000000000001   # alex@example.com (current, mine)
+S=bbbb2222-0000-4000-8000-000000000002   # sam@example.com (mine, pinned)
+J=cccc3333-0000-4000-8000-000000000003   # jordan@example.com (not mine)
+T=dddd4444-0000-4000-8000-000000000004   # taylor@example.com (no saved login)
+case "$1" in
+  status) cat <<JSON
+{"current": "$A", "signedIn": true, "claudeRunning": true,
+ "claudeVersion": "1.0.1307", "versionTested": true, "layoutProblems": [], "pendingRecovery": false,
+ "settings": {"syncOnSwitch": false, "syncConfirmed": true, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7,
+   "showNameInMenuBar": true, "hidden": [], "order": ["$A", "$J", "$T"], "pinned": ["$S"]},
+ "accounts": [
+  {"id": "$A", "name": "alex@example.com", "sessions": 142, "lastUsed": $((now - 60)), "savedLogin": true, "savedAt": $((now - 240)), "savedMode": "auto", "current": true, "hidden": false, "owned": true},
+  {"id": "$S", "name": "sam@example.com (Team)", "sessions": 128, "lastUsed": $((now - 7200)), "savedLogin": true, "savedAt": $((now - 7200)), "savedMode": "switch", "current": false, "hidden": false, "owned": true},
+  {"id": "$J", "name": "jordan@example.com", "sessions": 37, "lastUsed": $((now - 3*86400)), "savedLogin": true, "savedAt": $((now - 3*86400)), "savedMode": "switch", "current": false, "hidden": false, "owned": false},
+  {"id": "$T", "name": "taylor@example.com", "sessions": 0, "lastUsed": 0, "savedLogin": false, "savedAt": 0, "savedMode": "", "current": false, "hidden": false, "owned": false}
+ ],
+ "paused": [{"id": "local_demo1", "title": "Refactor the billing module", "account": "$S", "cwd": "/Users/demo/projects/shop",
+   "message": "You've hit your session limit", "resets": "4:50pm", "resetsAt": $((now + 5400)), "stoppedAt": "2026-11-08T10:00:00Z"}]}
+JSON
+  ;;
+  sync) echo "{\"changes\": 23, \"accounts\": {\"$A\": 9, \"$S\": 14}, \"skipped\": [\"$J\", \"$T\"], \"dryRun\": true}" ;;
+  backups) echo "{\"backups\": [{\"name\": \"2026-11-09\", \"kind\": \"daily\", \"time\": \"2026-11-09\", \"sessions\": 307, \"modified\": $((now - 3600))}, {\"name\": \"2026-11-08\", \"kind\": \"daily\", \"time\": \"2026-11-08\", \"sessions\": 301, \"modified\": $((now - 90000))}, {\"name\": \"2026-11-07\", \"kind\": \"daily\", \"time\": \"2026-11-07\", \"sessions\": 296, \"modified\": $((now - 176400))}]}" ;;
+  update-check) echo '{"available": false}' ;;
+  *) echo '{"ok": true}' ;;
+esac

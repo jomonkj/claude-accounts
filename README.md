@@ -1,144 +1,183 @@
 # Claude Accounts
 
-A macOS menu bar app that switches the **Claude desktop app** between accounts with one click. It does not lose sessions, and you sign in to each account only one time.
+> Unofficial. Not made by or affiliated with Anthropic.
+
+A macOS menu bar app that switches the **Claude desktop app** between your accounts with one click. You sign in to each account one time. You do not lose sessions.
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/panel-dark.png">
+    <img src="docs/screenshots/panel-light.png" width="380" alt="The menu bar panel with four demo accounts and one session stopped on the usage limit">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/sync-preview-dark.png">
+    <img src="docs/screenshots/sync-preview-light.png" width="260" alt="The sync preview: 23 sessions go to two accounts">
+  </picture>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-accounts-dark.png">
+  <img src="docs/screenshots/settings-accounts-light.png" width="620" alt="Settings, Accounts tab: one table with sessions, login, Mine and Show for each account">
+</picture>
+
+The screenshots use demo data. `scripts/screenshots.sh` makes them again.
 
 ## What it does
 
-- **One-click switch.** The app saves the login of each account. A switch quits Claude, saves the current login, loads the target login, and opens Claude again. Then it checks that the login works.
-- **Automatic login save.** Every 5 minutes, the app saves the login that Claude uses now. If you sign out inside Claude, the login is not lost.
-- **Two-way session sync between your own accounts.** Mark your accounts as "mine" (right-click → **Mark as mine**). **Sync now** shows a preview, makes a backup, and gives every "mine" account the newest copy of every session. Accounts that are not "mine" are never read or written. Conversation transcripts are stored in one place (`~/.claude/projects`), so every account opens the same conversation. You can also turn on sync on every switch.
-- **Stopped on usage limit.** Lists sessions that stopped on the 5-hour limit, with the reset time. **Open** opens the session in Claude. A notification appears one time for each stopped session, with **Switch to …** buttons for your other "mine" accounts and **Open session**. The app never switches by itself; a button click still shows the normal confirmation. If macOS does not allow notifications for the app, the menu bar icon shows a red count instead.
-- **Wrong-account warning.** Shows a warning when the active account has few sessions and another account has many.
-- **Backups and restore.** A daily copy of all session lists goes to `~/Backups/claude-sessions`, and the app keeps the last N days. Sync always makes a backup first. **Backups → Restore a backup…** restores any backup, and before that it saves the current state, so a restore can be undone.
-- **Settings window** (⌘, in the panel), with these tabs: General, Accounts (one table with sessions, login, Mine and Show for each account), Sync, Backups (list and restore), and Advanced (Claude version, layout check, recover, files).
-- **First-run guide.** Three pages: what the app does, mark your accounts and add missing logins, then sync and open-at-login. Open it again from Settings → General.
-- **Upkeep.** Rename an account, hide it, or forget its saved login. You can show the account name in the menu bar, and the app can open at login.
+The Claude desktop app keeps one login at a time. To use another account, you must sign out and sign in again. Claude Accounts saves the login of each account. A switch quits Claude, saves the current login, loads the other login, and opens Claude again. Then it checks that the new login works.
+
+Sessions are stored per account. Claude Accounts can sync the session lists of your own accounts, so every account shows every session.
+
+## Features
+
+- **One-click switch** from the menu bar panel.
+- **Automatic login save.** Every 5 minutes, the app saves the login that Claude uses now.
+- **Two-way session sync** between the accounts that you mark as "mine". You see a preview first, and a backup is made first. Accounts that are not "mine" are never read or written.
+- **Stopped on usage limit.** The panel lists sessions that stopped on the usage limit, with the time the limit resets. A notification offers a switch to another of your accounts. The app never switches by itself.
+- **Wrong-account warning** when the active account has few sessions and another account has many.
+- **Daily backups and restore.** A restore backs up the current state first, so you can undo it.
+- **Settings window** with General, Accounts, Sync, Backups, Advanced and About tabs.
+- **First-run guide** that explains the app and helps you add your accounts.
+
+New in 1.1:
+
+- **Pin and sort.** Pin an account to the top of the panel. Drag to sort in Settings → Accounts.
+- **Sign in to save.** An account without a saved login shows **Sign in to save**. The app guides you, then saves the login.
+- **Usage reset time** under each account that stopped on the limit.
+- **Keyboard shortcuts:** ⌃⌥⌘C opens the panel, ⌃⌥⌘N switches to the next account. You can turn each one off.
+- **Remove account.** Its sessions move into the backups, so you can get them back.
+- **Copy debug report** (Settings → About). Emails and account IDs show as "account 1", "account 2".
+- **Uninstall** (Settings → About). Saved logins and backups stay.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/welcome-dark.png">
+  <img src="docs/screenshots/welcome-light.png" width="520" alt="First-run guide, page 1">
+</picture>
 
 ## Install
 
-**Teammates** (needs the GitHub CLI, signed in with access to this repo):
+Needs macOS 14 or later and the [GitHub CLI](https://cli.github.com) (`brew install gh`, then `gh auth login`).
 
 ```bash
 gh release download --repo jomonkj/claude-accounts --pattern install-release.sh --output - | bash
 ```
 
-The script downloads the latest release, checks its sha256, installs the app to `~/Applications`, removes the quarantine flag, links the CLI into `~/.local/bin`, adds the login item, and opens the app.
+The install script:
 
-If you do not use Terminal: download `Claude-Accounts-<version>.zip` from the Releases page, unzip it, and move the app to Applications. The app is not notarized, so the first time, **right-click it → Open → Open**.
+1. Downloads the latest release and checks its sha256.
+2. Installs the app to `~/Applications`.
+3. Removes the quarantine flag from the app.
+4. Links the CLI commands into `~/.local/bin`.
+5. Adds the login item and opens the app.
 
-**Updates:** the app checks GitHub Releases once a day through `gh`. When a new version exists, the panel shows **Update**.
+**Why the script removes the quarantine flag:** the app is not notarized by Apple. Notarization needs a paid Apple Developer account. Without it, macOS blocks a downloaded app that has the quarantine flag and says that it "cannot be opened". The script removes the flag only from this app, after it checks the sha256 of the download. If you prefer to do it by hand: download the zip from the Releases page, move the app to Applications, then **right-click it → Open → Open** the first time.
 
-**From source** (needs the Xcode Command Line Tools and macOS 14 or later):
+**Updates:** the app checks GitHub Releases once a day. When a new version exists, the panel shows **Update**.
 
-```bash
-scripts/install.sh
-```
-
-This runs all tests, builds for this Mac, and installs the build in the same way.
+**Uninstall:** Settings → About → Uninstall, or `claude-switch uninstall`.
 
 ## First use
 
 1. Click the menu bar icon, then **Add account**.
 2. Claude opens signed out. Sign in with your other account.
-3. Do the same for each other account. After that, use **Switch**.
+3. Do the same for each other account. Then use **Switch**.
+4. Right-click your own accounts and click **Mark as mine**. Then **Sync now** keeps their sessions the same.
 
 ## CLI
 
+The install links two commands: `claude-accounts` (a table of accounts) and `claude-switch` (the engine; most commands print JSON). `<account>` is a full account ID or its first 8 characters.
+
+| Command | What it does |
+|---|---|
+| `status` | Accounts, saved logins, stopped sessions, settings |
+| `list` | Table of accounts (the same as `claude-accounts`) |
+| `switch <account> [--force]` | Quit Claude, save this login, load the other login, open Claude |
+| `add` | Save this login, then open Claude signed out |
+| `save-login <account>` | Save the login if Claude is signed in to that account |
+| `sync [--dry-run]` | Two-way sync of session lists between "mine" accounts |
+| `mine` / `not-mine <account>` | Mark an account as yours (sync uses only these) |
+| `backup`, `backups`, `restore <name>` | Make, list and restore backups |
+| `label [<account>] <name>` | Name an account |
+| `forget <account>` | Delete the saved login of an account |
+| `remove <account>` | Remove an account; its sessions move into the backups |
+| `hide` / `unhide <account>` | Hide an account from the list |
+| `pin` / `unpin <account>`, `order <account>...` | Pin to the top, set the order |
+| `set <key> <value>` | Change a setting |
+| `recover` | Finish or roll back a switch that stopped in the middle |
+| `report` | Debug report with no emails and no account IDs |
+| `uninstall` | Remove the app (in ~/Applications and /Applications), the login item and the CLI links |
+
+Example:
+
 ```bash
-claude-accounts                 # table of accounts
-claude-switch status            # JSON
-claude-switch switch 6bd8db16   # switch (full or 8-character account ID)
-claude-switch mine 6bd8db16                         # mark as yours
-claude-switch sync --dry-run                        # preview
-claude-switch backups; claude-switch restore 2026-11-08
-claude-switch label 6bd8db16 "me@example.com"
+claude-switch switch aaaa1111
+claude-switch sync --dry-run
 ```
 
 Run `claude-switch help` to see all commands.
 
-## How it works
+## Safety design
 
-The Claude desktop app keeps its login in these places under `~/Library/Application Support/Claude`:
+The app changes files that the Claude desktop app owns. It is careful with them:
 
-| What | Where |
-|---|---|
-| Web session cookie (`sessionKey`) | `Cookies` |
-| OAuth token, active account | `config.json` keys `oauth:tokenCacheV2` and `lastKnownAccountUuid` |
-| Web storage | `Local Storage`, `Session Storage`, `IndexedDB`, `WebStorage` |
+- **One engine.** Only the engine (`engine/claude-switch`, Python) changes files. The app calls it.
+- **Journal.** A switch writes its progress to `journal.json` before each step: `started → saved → loaded → synced`. If the switch stops in the middle (for example, the Mac loses power), `recover` reads the journal. It rolls back to the last state, or it finishes the switch. The app runs `recover` when it starts. While a journal exists, all other changes are refused.
+- **Last state.** Before every switch, the exact login state goes to `last-state`, so you can restore it.
+- **Backups.** Sync, restore and remove always make a backup first. A daily backup goes to `~/Backups/claude-sessions`.
+- **Sync never deletes.** The newest copy of each session wins. A session that you deleted in one account is not added back. Accounts that are not "mine" are not read and not written.
+- **Layout check.** Before a switch, the engine checks that the Claude data folder has the layout it knows. If not, it stops and changes nothing.
+- **Private files.** Saved logins are in `~/Library/Application Support/Claude Account Switcher/profiles`, readable only by you (mode 700). Every action is written to `switch.log` in the same folder.
 
-All of these are encrypted with the key `Claude Safe Storage` in the macOS Keychain. That key is the same for every account, so a saved copy restores the login. Saved logins go to `~/Library/Application Support/Claude Account Switcher/profiles/<account>`, and only your user can read them (mode 700).
+Tests check this: `tests/crash_test.sh` stops the engine after each step and checks the recovery, and `tests/sync_property_test.py` checks the sync rules on 500 random stores.
 
-Session lists are stored per account in `claude-code-sessions/<account>/<org>/local_*.json`. Share copies those files and does not touch the transcripts.
+### How the login is saved
 
-Before every switch, the exact state goes to `.../Claude Account Switcher/last-state`, so you can restore it by hand. Every action is written to `switch.log` in the same folder.
-
-### Crash safety
-
-A switch writes its progress to `journal.json` before each step that changes files: `started → saved → loaded → synced`. If the engine stops in the middle (for example, the Mac loses power), `claude-switch recover` reads the journal:
-
-| Stopped after | Recover does |
-|---|---|
-| `started` | nothing; no file was changed |
-| `saved` (or during the load) | rolls back to `last-state` |
-| `loaded`, `synced` | finishes the switch; the target login is complete |
-
-The app runs `recover` by itself when it starts. While a journal exists, every other change is refused, and the automatic login save does not run. `tests/crash_test.sh` stops the engine after each step and checks the result (45 checks).
-
-### Sync rules
-
-Sync uses only the accounts marked as "mine":
-
-1. For each session, the copy with the newest modification time goes to every "mine" account that has an older copy or no copy.
-2. A session that is deleted in any "mine" account (Claude writes a `deleted_<id>` file) is not added to accounts that do not have it.
-3. Sync never deletes a file.
-4. Accounts that are not "mine" are not read and not written.
-5. A second sync changes nothing.
-
-`tests/sync_property_test.py` checks these rules on 500 random stores, with 3–5 accounts, some folders missing, some deleted markers, and random times. Three deliberately broken versions of the sync (ignore deleted markers, oldest wins, sync every account) each fail it. On a copy of the real data (2,897 session files, 839 changes), sync takes 0.6 s; the first backup of a day adds about 6 s.
-
-### Version and layout guard
-
-Before a switch, the engine checks that the Claude data folder still has the layout it knows: `config.json`, a `Cookies` database with a `cookies(host_key, name)` table, the session folder, and an account ID next to the token. If any check fails, the switch stops and changes nothing; `--force` overrides this. A Claude version that is not in the tested list, but has the known layout, may switch with a warning; after the first successful `verify`, that version counts as tested.
+The Claude desktop app keeps its login under `~/Library/Application Support/Claude`: the `Cookies` database, two keys in `config.json` (`oauth:tokenCacheV2`, `lastKnownAccountUuid`), and its web storage folders. These are encrypted with the key `Claude Safe Storage` in the macOS Keychain. That key is the same for every account, so a saved copy restores the login.
 
 ## Limits
 
 - The app switches only the Claude desktop app. The `claude` CLI in a terminal has its own login.
 - A switch stops tasks that run in Claude. Finish them first.
-- If a saved login expires, the app tells you. Sign in again in Claude, and the app saves the new login.
-- Share copies sessions into another account. Do not share into an account that another person uses.
-- The app depends on how the Claude desktop app stores its files. If an update changes that, the check after each switch shows the failure.
+- If a saved login expires, the app tells you. Sign in again, and the app saves the new login.
+- Sync only between your own accounts. Do not mark an account that another person uses as "mine".
+- The app depends on how the Claude desktop app stores its files. If an update changes that, the layout check stops the switch.
 
-## Development
+## Build from source
+
+Needs the Xcode Command Line Tools (`xcode-select --install`) and macOS 14 or later. Xcode is not needed.
 
 ```bash
-tests/engine_test.sh                                # engine tests in a fake app folder
-tests/crash_test.sh                                 # kill the engine at each switch step, then recover
-tests/sync_property_test.py [cases]                 # sync rules on random stores (default 500)
-tests/install_test.sh                               # installer in a fake HOME (needs a build)
-swift run CoreTests                                 # app logic tests (no Xcode needed)
-scripts/build.sh                                    # universal build into ./build
-ARCHS=arm64 scripts/build.sh                        # faster, one architecture
-build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render /tmp/panel.png [dark]
-build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render-settings accounts /tmp/settings.png
-build/Claude\ Accounts.app/Contents/MacOS/ClaudeAccounts --render-welcome 1 /tmp/welcome.png
+scripts/install.sh                 # run all tests, build for this Mac, install
 ```
 
-The `--render` option draws the panel to a PNG file, so you can check the layout without the menu bar.
+Development:
 
-XCTest and swift-testing need Xcode. This project builds with the Command Line Tools only, so the Swift tests are a small program (`swift run CoreTests`) that exits with code 1 on failure.
+```bash
+tests/engine_test.sh               # engine tests in a fake app folder
+tests/crash_test.sh                # stop the engine at each switch step, then recover
+tests/sync_property_test.py 500    # sync rules on random stores
+tests/install_test.sh              # installer in a fake HOME (run ARCHS=arm64 scripts/build.sh first)
+tests/ocr_check_test.sh            # the screenshot text check
+swift run CoreTests                # app logic tests
+scripts/build.sh                   # universal build into ./build (ARCHS=arm64 for a fast one)
+scripts/screenshots.sh             # README screenshots, with a demo engine and demo data
+swift scripts/ocr-check.swift --expect alex@example.com docs/screenshots/*.png
+```
 
-## Releases
-
-Push a tag such as `v1.0.0`. The Release workflow runs all tests, builds a universal app (arm64 and x86_64), zips it, and creates a GitHub Release with notes from the commits. If the secret `DEVELOPER_ID_P12` exists, the workflow also signs and notarizes the app.
+`scripts/screenshots.sh` builds a copy of the app with `scripts/demo/claude-switch` as its engine. The demo engine prints fixed demo data and reads no files. `scripts/ocr-check.swift` reads all text in the PNGs with the macOS Vision framework. It fails on any email that is not `@example.com`, on any `--deny` pattern, and when an `--expect` text is missing.
 
 Layout:
 
 ```
 engine/claude-switch          Python engine (all file work; the app calls it)
-Sources/ClaudeAccountsCore/   models, engine client, derived state (no UI)
+Sources/ClaudeAccountsCore/   models, engine client, rules (no UI)
 Sources/ClaudeAccounts/       SwiftUI menu bar app
-Tests/CoreTests/              Core tests, run as a program with a fake engine
-tests/engine_test.sh          engine tests
-scripts/                      build, install, icon
-ci-pending/                   CI and release workflows (see ci-pending/README.md)
+tests/                        engine, crash, sync, install and app logic tests
+scripts/                      build, install, screenshots, OCR check
 ```
+
+**Releases:** the release workflow (`.github/workflows/release.yml`) runs on a tag such as `v1.1.0`. It runs all tests, builds a universal app, zips it, and makes a GitHub Release.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

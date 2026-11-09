@@ -22,6 +22,9 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
         return String(first.prefix(12))
     }
 
+    /// Show "Sign in to save": no saved login, and not the account Claude uses now.
+    public var needsSignInToSave: Bool { !savedLogin && !current }
+
     public var initials: String {
         let base = name.isEmpty ? String(id.prefix(2)) : name
         let parts = base.split(whereSeparator: { " @._-()".contains($0) }).prefix(2)
@@ -51,6 +54,8 @@ public struct PausedSession: Identifiable, Decodable, Equatable, Sendable {
     public let cwd: String
     public let message: String
     public let resets: String
+    /// When the limit resets (epoch seconds), or nil when the engine could not read the reset text.
+    public let resetsAt: Double?
     public let stoppedAt: String
 }
 
@@ -62,6 +67,10 @@ public struct EngineSettings: Decodable, Equatable, Sendable {
     public var backupKeep: Int
     public var showNameInMenuBar: Bool
     public var hidden: [String]
+    /// Account IDs in the order the user chose. Accounts not in the list go last.
+    public var order: [String]
+    /// Account IDs pinned to the top of the panel.
+    public var pinned: [String]
 }
 
 /// Output of `claude-switch sync --dry-run` and `sync`.
@@ -83,9 +92,26 @@ public struct UpdateInfo: Decodable, Equatable, Sendable {
 /// One entry of `claude-switch backups`.
 public struct BackupInfo: Decodable, Equatable, Sendable {
     public let name: String
+    /// "daily", "pre-restore" (the undo of a restore) or "removed" (the sessions of a removed account).
+    /// Nil from an engine older than v1.1.
+    public let kind: String?
+    /// Time to show, for example "2026-11-08 12:34".
+    public let time: String?
+    /// First 8 characters of the removed account (kind "removed").
+    public let account: String?
     public let sessions: Int
     public let modified: Double
-    public var isUndo: Bool { name.hasPrefix("pre-restore-") }
+    public var isUndo: Bool { kind == "pre-restore" }
+    public var isRemoved: Bool { kind == "removed" }
+
+    /// Name to show in the Backups list.
+    public var title: String {
+        switch kind {
+        case "pre-restore": return "Before restore " + (time ?? name)
+        case "removed": return "Removed account \(account ?? "?") (\(time ?? name))"
+        default: return name
+        }
+    }
 }
 
 /// Output of `claude-switch status`.

@@ -55,6 +55,10 @@ struct AccountRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                        if store.isPinned(account) {
+                            Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                                .help("Pinned to the top")
+                        }
                         if account.owned {
                             Text("MINE").font(.system(size: 8.5, weight: .bold))
                                 .padding(.horizontal, 4).padding(.vertical, 1)
@@ -67,23 +71,18 @@ struct AccountRow: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     Text(account.loginText)
                         .font(.system(size: 10)).foregroundStyle(account.savedLogin ? .green : .secondary).lineLimit(1)
+                    // Re-check every 30 s, so the line goes away when the reset time passes.
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        if let line = store.status?.resetLine(for: account.id, now: ctx.date) {
+                            Text(line).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
                 }
                 Spacer(minLength: 6)
                 trailing
             }
         }
-        .contextMenu {
-            Button("Rename…") { store.rename(account) }
-            Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
-            if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
-            if !account.current {
-                Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
-            }
-            Divider()
-            Button("Copy account ID") {
-                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(account.id, forType: .string)
-            }
-        }
+        .contextMenu { AccountMenu(account: account) }
     }
 
     @ViewBuilder var trailing: some View {
@@ -93,10 +92,34 @@ struct AccountRow: View {
         } else if account.savedLogin {
             Button("Switch") { store.switchTo(account) }
                 .buttonStyle(.borderedProminent).controlSize(.small).disabled(store.busy != nil)
-        } else {
-            Text("Sign in once")
-                .font(.system(size: 11)).foregroundStyle(.tertiary)
-                .help("Click Add account and sign in with this account one time. After that, one click switches to it.")
+        } else if account.needsSignInToSave {
+            Button("Sign in to save") { store.signInToSave(account) }
+                .controlSize(.small).disabled(store.busy != nil)
+                .help("Sign in to this account in Claude one time. The app saves the login. After that, one click switches to it.")
+        }
+    }
+}
+
+/// The actions of one account. The panel (right-click) and Settings → Accounts (⋯ button) use the same menu.
+/// Actions that do not fit the current account stay in the menu, disabled, with a help text.
+struct AccountMenu: View {
+    @EnvironmentObject var store: Store
+    let account: Account
+
+    var body: some View {
+        Button("Rename…") { store.rename(account) }
+        Button(account.owned ? "Not mine" : "Mark as mine") { store.setOwned(account, !account.owned) }
+        Button(store.isPinned(account) ? "Unpin" : "Pin to top") { store.setPinned(account, !store.isPinned(account)) }
+        if account.savedLogin { Button("Forget saved login…") { store.forget(account) } }
+        if account.needsSignInToSave { Button("Sign in to save…") { store.signInToSave(account) } }
+        Button(account.hidden ? "Show in list" : "Hide from list") { store.setHidden(account, !account.hidden) }
+            .disabled(account.current).help(account.current ? "The current account always shows." : "")
+        Button("Remove account…") { store.remove(account) }
+            .disabled(account.current)
+            .help(account.current ? "You cannot remove the current account. Switch to another account first." : "")
+        Divider()
+        Button("Copy account ID") {
+            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(account.id, forType: .string)
         }
     }
 }
@@ -111,7 +134,9 @@ struct PausedRow: View {
                 Image(systemName: "pause.circle.fill").font(.system(size: 22)).foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.title).font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
-                    Text(subtitle).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        Text(subtitle(ctx.date)).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 6)
                 Button("Open") { store.open(session) }.controlSize(.small)
@@ -120,9 +145,8 @@ struct PausedRow: View {
         }
     }
 
-    var subtitle: String {
-        let who = store.account(session.account)?.shortTitle ?? String(session.account.prefix(8))
-        return (session.resets.isEmpty ? "Limit reached" : "Limit resets \(session.resets)") + " · \(who)"
+    func subtitle(_ now: Date) -> String {
+        store.status?.pausedSubtitle(session, now: now) ?? "Limit reached"
     }
 }
 

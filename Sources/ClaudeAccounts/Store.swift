@@ -20,15 +20,26 @@ final class Store: ObservableObject {
     let engine: EngineClient
     let notifier = Notifier()
     private var timer: Timer?
+    private var hotKeys: HotKeys?
+    private var nextRunning = false
 
     init(engine: EngineClient = .bundled(), startTimer: Bool = true) {
         self.engine = engine
-        guard startTimer else { return }
+        // A debug render draws one PNG and exits: no notifications, timer, shortcuts or welcome window.
+        // (The App's own Store is made in a render too, so this check is needed besides startTimer.)
+        guard startTimer, !RenderMode.isOn() else { return }
         notifier.onSwitch = { [weak self] id in
             guard let self, let a = self.account(id) else { return }
             self.switchTo(a)
         }
         notifier.start()
+        hotKeys = HotKeys { [weak self] key in
+            switch key {
+            case .openPanel: self?.openPanel()
+            case .nextAccount: self?.switchToNext()
+            }
+        }
+        hotKeys?.apply()
         if !UserDefaults.standard.bool(forKey: "welcomeDone") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
         }
@@ -87,8 +98,10 @@ final class Store: ObservableObject {
 
     // MARK: derived state (see ClaudeAccountsCore/Logic.swift)
 
-    var accounts: [Account] { status?.accounts ?? [] }
-    var visibleAccounts: [Account] { status?.visibleAccounts(showHidden: showHidden) ?? [] }
+    /// All accounts in panel order (Settings → Accounts).
+    var accounts: [Account] { status?.panelOrder(showHidden: true) ?? [] }
+    var visibleAccounts: [Account] { status?.panelOrder(showHidden: showHidden) ?? [] }
+    func isPinned(_ a: Account) -> Bool { status?.isPinned(a.id) ?? false }
     var hiddenCount: Int { status?.hiddenCount ?? 0 }
     var current: Account? { status?.currentAccount }
     func account(_ id: String) -> Account? { status?.account(id) }
@@ -123,6 +136,43 @@ final class Store: ObservableObject {
         }
     }
 
+    /// ⌃⌥⌘N: switch to the next account that is mine and has a saved login, in panel order.
+    /// Does nothing while a switch or another engine task runs.
+    func switchToNext() {
+        guard busy == nil, !nextRunning else { return }
+        nextRunning = true
+        Task {
+            defer { nextRunning = false }
+            await refresh()
+            guard busy == nil else { return }
+            guard let next = status?.nextAccount(showHidden: showHidden) else {
+                notifier.say("No other account", "Save the login of another account first. Then the shortcut can switch to it.")
+                return
+            }
+            switchTo(next)
+        }
+    }
+
+    /// ⌃⌥⌘C: open the panel, as a click on the menu bar icon does.
+    func openPanel() {
+        NSApp.activate(ignoringOtherApps: true)
+        func button(in v: NSView?) -> NSStatusBarButton? {
+            guard let v else { return nil }
+            if let b = v as? NSStatusBarButton { return b }
+            return v.subviews.lazy.compactMap { button(in: $0) }.first
+        }
+        for w in NSApp.windows where w.className.contains("StatusBar") {
+            if let b = button(in: w.contentView) { b.performClick(nil); return }
+        }
+    }
+
+    /// Turns a shortcut on or off (Settings → General).
+    func setShortcut(_ key: HotKeys.Key, _ on: Bool) {
+        UserDefaults.standard.set(on, forKey: key.setting)
+        hotKeys?.apply()
+        objectWillChange.send()
+    }
+
     func addAccount() {
         guard Dialog.confirm("Add another account?",
             "Claude quits, saves your current login, and opens signed out. Sign in with the other account. The app saves that login too, so you can switch with one click.",
@@ -132,6 +182,35 @@ final class Store: ObservableObject {
                 banner = .info("Sign in to the new account in Claude. The app saves the login within 5 minutes, or when you switch.")
             }
         }
+    }
+
+    /// "Sign in to save": the `add` flow, then wait until Claude is signed in to the picked account.
+    func signInToSave(_ a: Account) {
+        guard Dialog.confirm("Sign in to \(a.title)?",
+            "Claude quits and opens signed out. Your login is saved first.\n\nThen sign in to \(a.title) in Claude. The app saves that login and tells you.\n\nRunning tasks in Claude stop.",
+            ok: "Continue") else { return }
+        Task {
+            guard await perform("Saving your login…", ["add"]) != nil else { return }
+            banner = .info("Now sign in to \(a.title) in Claude. The app waits for the sign-in.")
+            await waitForSignIn(a)
+        }
+    }
+
+    private func waitForSignIn(_ a: Account) async {
+        let end = Date().addingTimeInterval(15 * 60)
+        while Date() < end {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            let r = await run(["save-login", a.id])
+            guard r.ok else { banner = .error(r.output); return }
+            if let b = Status.signInResult(r.json, title: a.title) {
+                banner = b
+                await refresh()
+                if case .success(let t) = b { notifier.say("Login saved", t) }
+                else if case .warning(let t) = b { notifier.say("Other account", t) }
+                return
+            }
+        }
+        banner = .info("No sign-in to \(a.title) in 15 minutes. Click Sign in to save to try again.")
     }
 
     func syncNow() {
@@ -146,15 +225,20 @@ final class Store: ObservableObject {
                 banner = .error(dry.output); return
             }
             guard r.changes > 0 else { banner = .info("All your accounts already have every session."); return }
-            let lines = s.syncPreview(r).map { "• " + $0 }.joined(separator: "\n")
-            let first = s.settings.syncConfirmed ? "" : "This is your first sync. Check the numbers.\n\n"
-            guard Dialog.confirm("Sync \(r.changes) sessions between your accounts?",
-                first + lines + "\n\nA backup is made first. Claude quits during the sync and opens again. Accounts that are not marked as mine are not touched.",
-                ok: "Sync") else { return }
+            let p = Self.syncPrompt(s, r)
+            guard Dialog.confirm(p.title, p.text, ok: "Sync") else { return }
             if let out = await perform("Syncing sessions…", ["sync"]) {
                 banner = .success("\(out["changes"] as? Int ?? 0) sessions synced.")
             }
         }
+    }
+
+    /// Title and text of the sync preview dialog.
+    static func syncPrompt(_ s: Status, _ r: SyncResult) -> (title: String, text: String) {
+        let lines = s.syncPreview(r).map { "• " + $0 }.joined(separator: "\n")
+        let first = s.settings.syncConfirmed ? "" : "This is your first sync. Check the numbers.\n\n"
+        return ("Sync \(r.changes) sessions between your accounts?",
+                first + lines + "\n\nA backup is made first. Claude quits during the sync and opens again. Accounts that are not marked as mine are not touched.")
     }
 
     func setOwned(_ a: Account, _ mine: Bool) {
@@ -168,15 +252,11 @@ final class Store: ObservableObject {
                   let list = try? JSONDecoder().decode([BackupInfo].self, from: data), !list.isEmpty else {
                 banner = .info("No backups yet."); return
             }
-            let titles = list.map { b in
-                (b.isUndo ? "Before restore " + b.name.dropFirst("pre-restore-".count) : b.name) + "  (\(b.sessions) sessions)"
-            }
+            let titles = list.map { b in b.title + "  (\(b.sessions) sessions)" }
             guard let i = Dialog.choose("Restore a backup",
-                "The session lists of all accounts go back to the backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+                "The session lists of all accounts go back to the backup. The current state is backed up first, so you can undo this. Claude quits and opens again.\n\nA \"Removed account\" backup brings back only the sessions of that account.",
                 titles, ok: "Restore") else { return }
-            if let out = await perform("Restoring…", ["restore", list[i].name]) {
-                banner = .success("Restored \(list[i].name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
-            }
+            await restoreDone(list[i], await perform("Restoring…", ["restore", list[i].name]))
         }
     }
 
@@ -199,8 +279,31 @@ final class Store: ObservableObject {
         Task { await perform("Saving…", ["forget", a.id]) }
     }
 
+    func remove(_ a: Account) {
+        if let why = Status.removeRefusal(status, a) { banner = .info(why); return }
+        guard let s = status else { return }
+        let c = s.removeConfirmation(a)
+        guard Dialog.confirm(c.title, c.text, ok: "Remove") else { return }
+        Task {
+            if let r = await perform("Removing \(a.title)…", ["remove", a.id]) {
+                banner = .success("Removed \(a.title). Its sessions are in the backup \(r["backup"] as? String ?? "").")
+                await loadBackups()
+            }
+        }
+    }
+
     func setHidden(_ a: Account, _ hide: Bool) {
         Task { await perform("Saving…", [hide ? "hide" : "unhide", a.id]) }
+    }
+
+    func setPinned(_ a: Account, _ pin: Bool) {
+        Task { await perform("Saving…", [pin ? "pin" : "unpin", a.id]) }
+    }
+
+    /// Saves the order after a drag in Settings → Accounts.
+    func reorder(_ ids: [String], to index: Int) {
+        guard let order = status?.orderAfterMove(ids, to: index), order != accounts.map(\.id) else { return }
+        Task { await perform("Saving…", ["order"] + order) }
     }
 
     func set(_ key: String, _ value: Bool) {
@@ -232,6 +335,27 @@ final class Store: ObservableObject {
             if await perform("Downloading \(tag)…", ["update-install", tag]) != nil {
                 busy = "Installing \(tag)…"  // the installer stops this app and opens the new one
             }
+        }
+    }
+
+    // MARK: uninstall
+
+    func uninstall() {
+        guard Dialog.confirm("Uninstall Claude Accounts?",
+            """
+            This removes the app, the login item and the claude-switch and claude-accounts commands. \
+            Claude and its sessions do not change.
+
+            These stay, so you can install again without losing anything:
+            • Saved logins and settings: ~/Library/Application Support/Claude Account Switcher
+            • Backups: ~/Backups/claude-sessions
+            """, ok: "Uninstall") else { return }
+        Task {
+            busy = "Uninstalling…"; banner = nil
+            // The engine stops this app when it is done, so there is nothing to refresh after it.
+            let r = await run(["uninstall"])
+            busy = nil
+            if r.ok { NSApp.terminate(nil) } else { banner = .error(r.output) }
         }
     }
 
@@ -270,16 +394,31 @@ final class Store: ObservableObject {
         backups = list
     }
 
-    func restore(_ name: String) {
-        guard Dialog.confirm("Restore the backup \(name)?",
-            "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
+    func restore(_ b: BackupInfo) {
+        guard Dialog.confirm("Restore the backup \(b.title)?", b.isRemoved
+            ? "The sessions of the removed account come back. Newer session files stay. Other accounts do not change. The account comes back as not mine and without a saved login."
+            : "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
             ok: "Restore") else { return }
         Task {
-            if let out = await perform("Restoring…", ["restore", name]) {
-                banner = .success("Restored \(name). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
-            }
+            await restoreDone(b, await perform("Restoring…", ["restore", b.name]))
             await loadBackups()
         }
+    }
+
+    private func restoreDone(_ b: BackupInfo, _ out: [String: Any]?) async {
+        guard let out else { return }
+        let undo = "To undo, restore \"Before restore\" (\(out["undo"] as? String ?? ""))."
+        banner = .success(b.isRemoved ? "The sessions of the removed account are back. \(undo)" : "Restored \(b.title). \(undo)")
+    }
+
+    /// Copies the engine's debug report (no emails, no account IDs) to the clipboard.
+    /// Returns a short message for the user.
+    func copyDebugReport() async -> String {
+        let r = await run(Status.reportArguments(appSettings: HotKeys.Key.allCases.map { ($0.setting, $0.isOn) }))
+        guard r.ok, !r.output.isEmpty else { return "Cannot make the report: \(r.output)" }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(r.output, forType: .string)
+        return "Report copied. It has no emails and no account IDs."
     }
 
     func openLog() {
@@ -315,10 +454,15 @@ enum LoginItem {
 enum Dialog {
     static func confirm(_ title: String, _ text: String, ok: String) -> Bool {
         NSApp.activate(ignoringOtherApps: true)
+        return alert(title, text, ok: ok).runModal() == .alertFirstButtonReturn
+    }
+
+    /// The alert that `confirm` shows (also used by the debug render of the sync preview).
+    static func alert(_ title: String, _ text: String, ok: String) -> NSAlert {
         let a = NSAlert()
         a.messageText = title; a.informativeText = text
         a.addButton(withTitle: ok); a.addButton(withTitle: "Cancel")
-        return a.runModal() == .alertFirstButtonReturn
+        return a
     }
 
     /// A list choice. Returns the chosen index, or nil.

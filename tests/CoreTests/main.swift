@@ -60,6 +60,23 @@ func main() async {
     check("recover message: rolled back", Status.recoverMessage(["recovered": true, "action": "rolled back", "step": "saved"])?.contains("previous login is back") == true)
     check("recover message: finished", Status.recoverMessage(["recovered": true, "action": "finished", "step": "loaded"])?.contains("now finished") == true)
     check("recover message: nothing", Status.recoverMessage(["recovered": false]) == nil)
+    check("recover message: removal finished", Status.recoverMessage(["recovered": true, "op": "remove", "action": "finished", "step": "moved"]) == "A removal of an account stopped in the middle. It is now finished. Its sessions are in the backups.")
+    check("recover message: removal rolled back", Status.recoverMessage(["recovered": true, "op": "remove", "action": "rolled back", "step": "started"]) == "A removal of an account stopped before it changed anything. The account is unchanged.")
+
+    print("Remove account")
+    let other = s.account(B)!
+    check("other account can be removed", s.canRemove(other))
+    check("current account cannot be removed", !s.canRemove(s.currentAccount!))
+    check("remove refusal: none for another account", Status.removeRefusal(s, other) == nil)
+    check("remove refusal: current account", Status.removeRefusal(s, s.currentAccount!)
+          == "You cannot remove the current account. Switch to another account first.")
+    check("remove refusal: no status yet is not called the current account",
+          Status.removeRefusal(nil, other) == "The app has not read the accounts yet. Try again in a moment.")
+    let confirm = s.removeConfirmation(other)
+    check("confirm title names the account", confirm.title == "Remove jomon@example.com (Team)?")
+    for word in ["saved login", "name", "settings", "sessions", "backups", "sign in"] {
+        check("confirm text says what happens: \(word)", confirm.text.contains(word))
+    }
 
     check("owned accounts", s.ownedAccounts.map(\.id) == [A, B])
     let preview = try! JSONDecoder().decode(SyncResult.self, from: Data(
@@ -67,8 +84,15 @@ func main() async {
     check("sync preview: biggest first, names, no zero lines",
           s.syncPreview(preview) == ["jomon@example.com (Team): 16 sessions", "Account aaaa1111: 4 sessions"])
     let backups = try! JSONDecoder().decode([BackupInfo].self, from: Data(
-        #"[{"name": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "sessions": 9, "modified": 2}]"#.utf8))
-    check("undo backup is marked", backups.map(\.isUndo) == [false, true])
+        #"[{"name": "2026-11-08", "kind": "daily", "time": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "kind": "pre-restore", "time": "2026-11-08 12:00", "sessions": 9, "modified": 2}]"#.utf8))
+    check("undo backup is marked by its kind", backups.map(\.isUndo) == [false, true])
+    let removedBackup = try! JSONDecoder().decode(BackupInfo.self, from: Data(
+        #"{"name": "removed-x", "kind": "removed", "time": "2026-11-08 12:34", "account": "bbbb2222", "sessions": 3, "modified": 3}"#.utf8))
+    check("removed-account backup is marked by its kind", removedBackup.isRemoved && !removedBackup.isUndo && !backups[0].isRemoved)
+    check("backup titles", backups.map(\.title) == ["2026-11-08", "Before restore 2026-11-08 12:00"])
+    check("removed-account backup title", removedBackup.title == "Removed account bbbb2222 (2026-11-08 12:34)")
+    let oldEngine = try! JSONDecoder().decode(BackupInfo.self, from: Data(#"{"name": "2026-11-07", "sessions": 1, "modified": 1}"#.utf8))
+    check("backup without a kind (older engine) is a plain backup", oldEngine.title == "2026-11-07" && !oldEngine.isUndo)
 
     check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
     check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)
@@ -76,6 +100,114 @@ func main() async {
     let note = s.notificationText(for: s.paused[0])
     check("notification text", note.title == "Usage limit reached"
           && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
+
+    print("Reset time")
+    let ist = TimeZone(identifier: "Asia/Calcutta")!
+    let resetAt = Date(timeIntervalSince1970: 1794136800)  // 2026-11-08 4:50 PM in Asia/Calcutta
+    check("reset time decoded", s.paused[0].resetsAt == 1794136800)
+    check("reset line before the reset",
+          s.resetLine(for: B, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == "Limit resets 4:50 PM")
+    check("reset line names the day when it is not today",
+          s.resetLine(for: B, now: resetAt.addingTimeInterval(-86400), timeZone: ist) == "Limit resets Sun 4:50 PM")
+    check("no reset line after the reset", s.resetLine(for: B, now: resetAt.addingTimeInterval(1), timeZone: ist) == nil)
+    check("no reset line for an account without a limit",
+          s.resetLine(for: A, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == nil)
+    let unknown = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"resetsAt\": 1794136800", with: "\"resetsAt\": null").utf8))
+    check("no reset line when the reset time is not known",
+          unknown.resetLine(for: B, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == nil)
+    check("paused row: reset known", s.pausedSubtitle(s.paused[0], now: resetAt.addingTimeInterval(-3600), timeZone: ist)
+          == "Limit resets 4:50 PM · jomon")
+    check("paused row: reset passed", s.pausedSubtitle(s.paused[0], now: resetAt.addingTimeInterval(1), timeZone: ist)
+          == "Limit reached · jomon")
+    check("paused row: reset not known", unknown.pausedSubtitle(unknown.paused[0], now: resetAt, timeZone: ist)
+          == "Limit reached · jomon")
+
+    print("Account order")
+    let C = "cccc3333-0000-0000-0000-000000000000"
+    func ordered(order: [String], pinned: [String] = []) -> Status {
+        let json = try! String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"order\": []", with: "\"order\": [\(order.map { "\"\($0)\"" }.joined(separator: ","))]")
+            .replacingOccurrences(of: "\"pinned\": []", with: "\"pinned\": [\(pinned.map { "\"\($0)\"" }.joined(separator: ","))]")
+        return try! JSONDecoder().decode(Status.self, from: Data(json.utf8))
+    }
+    check("no saved order: engine order", s.panelOrder(showHidden: false).map(\.id) == [A, B])
+    check("saved order is used", ordered(order: [B, A]).panelOrder(showHidden: false).map(\.id) == [B, A])
+    check("new account goes to the end", ordered(order: [C, B]).panelOrder(showHidden: true).map(\.id) == [C, B, A])
+    check("unknown id in the order is ignored",
+          ordered(order: ["dddd4444-0000-0000-0000-000000000000", B]).panelOrder(showHidden: false).map(\.id) == [B, A])
+    check("pinned account comes first", ordered(order: [], pinned: [B]).panelOrder(showHidden: false).map(\.id) == [B, A])
+    check("pinned first, then saved order, then new",
+          ordered(order: [A, C], pinned: [B]).panelOrder(showHidden: true).map(\.id) == [B, A, C])
+    check("pinned accounts keep the saved order among them",
+          ordered(order: [A, B, C], pinned: [C, B]).panelOrder(showHidden: true).map(\.id) == [B, C, A])
+    check("hidden pinned account stays hidden", ordered(order: [], pinned: [C]).panelOrder(showHidden: false).map(\.id) == [A, B])
+    check("drag down: order after move", s.orderAfterMove([A], to: 2) == [B, A, C])
+    check("drag up: order after move", s.orderAfterMove([C], to: 0) == [C, A, B])
+    check("drag to the same place keeps the order", s.orderAfterMove([B], to: 1) == [A, B, C])
+    check("drag of an unknown id changes nothing", s.orderAfterMove(["dddd4444"], to: 0) == [A, B, C])
+    check("isPinned", ordered(order: [], pinned: [B]).isPinned(B) && !s.isPinned(B))
+
+    print("Next account")
+    check("next account: the next one after the current one in panel order",
+          s.nextAccount(showHidden: false)?.id == B)
+    // Panel order C, B, A; A is current, C is not mine and has no saved login.
+    check("next account: skips an account that is not mine or has no saved login",
+          ordered(order: [C, B]).nextAccount(showHidden: true)?.id == B)
+    // Three accounts that are mine with a saved login: A, B, D.
+    let D = "dddd4444-0000-0000-0000-000000000000"
+    func three(current: String?, order: [String] = [A, B, D], pinned: [String] = [], hidden: [String] = []) -> Status {
+        func q(_ ids: [String]) -> String { "[" + ids.map { "\"\($0)\"" }.joined(separator: ",") + "]" }
+        let accs = [A, B, D].map { id in
+            "{\"id\": \"\(id)\", \"name\": \"\", \"sessions\": 1, \"lastUsed\": 0, \"savedLogin\": true, \"savedAt\": 0, "
+            + "\"savedMode\": \"switch\", \"current\": \(id == current), \"hidden\": \(hidden.contains(id)), \"owned\": true}"
+        }
+        let json = "{\"current\": \"\(current ?? "")\", \"signedIn\": true, \"claudeRunning\": true, \"claudeVersion\": \"1\", "
+            + "\"versionTested\": true, \"layoutProblems\": [], \"pendingRecovery\": false, \"paused\": [], "
+            + "\"settings\": {\"syncOnSwitch\": false, \"syncConfirmed\": false, \"autoSaveLogins\": true, \"dailyBackup\": true, "
+            + "\"backupKeep\": 7, \"showNameInMenuBar\": true, \"hidden\": \(q(hidden)), \"order\": \(q(order)), \"pinned\": \(q(pinned))}, "
+            + "\"accounts\": [\(accs.joined(separator: ","))]}"
+        return try! JSONDecoder().decode(Status.self, from: Data(json.utf8))
+    }
+    check("next account: from the middle", three(current: B).nextAccount(showHidden: false)?.id == D)
+    check("next account: wraps from the last to the first", three(current: D).nextAccount(showHidden: false)?.id == A)
+    check("next account: follows the saved order", three(current: A, order: [D, A, B]).nextAccount(showHidden: false)?.id == B)
+    check("next account: pinned accounts come first and the order wraps",
+          three(current: B, pinned: [D]).nextAccount(showHidden: false)?.id == D)
+    check("next account: skips a hidden account", three(current: B, hidden: [D]).nextAccount(showHidden: false)?.id == A)
+    check("next account: includes a hidden account when hidden accounts show",
+          three(current: B, hidden: [D]).nextAccount(showHidden: true)?.id == D)
+    check("next account: no current account starts at the first",
+          three(current: nil).nextAccount(showHidden: false)?.id == A)
+    check("next account: nil when no other account fits",
+          three(current: A, hidden: [B, D]).nextAccount(showHidden: false) == nil)
+
+    print("Sign in to save")
+    check("button only on accounts without a saved login", s.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
+    let curNoLogin = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"savedLogin\": true, \"savedAt\": 1794124745.0", with: "\"savedLogin\": false, \"savedAt\": 1794124745.0").utf8))
+    check("no button on the current account, even without a saved login",
+          curNoLogin.accounts.filter(\.needsSignInToSave).map(\.id) == [C])
+    check("sign-in result: still waiting", Status.signInResult(["ok": true, "saved": false, "waiting": true], title: "Test") == nil)
+    check("sign-in result: engine busy (the tick) keeps waiting",
+          Status.signInResult(["ok": true, "saved": false, "waiting": true, "busy": true], title: "Test") == nil)
+    check("sign-in result: saved", Status.signInResult(["ok": true, "saved": true, "match": true], title: "Test")
+          == .success("Login of Test is saved. You can now switch to it with one click."))
+    if case .warning(let t)? = Status.signInResult(["ok": true, "saved": false, "match": false, "message": "Claude is signed in to another account."], title: "Test") {
+        check("sign-in result: mismatch is a warning with the engine message", t.contains("another account"))
+    } else { check("sign-in result: mismatch is a warning with the engine message", false) }
+
+    print("Render mode")
+    check("render modes are found", ["--render", "--render-settings", "--render-sync", "--render-welcome"]
+          .allSatisfy { RenderMode.isOn(["/x/ClaudeAccounts", $0, "a.png"]) })
+    check("a normal launch is not a render", !RenderMode.isOn(["/x/ClaudeAccounts"]))
+
+    print("Debug report")
+    check("report arguments carry the shortcut states",
+          Status.reportArguments(appSettings: [("shortcutOpenPanel", true), ("shortcutNextAccount", false)])
+          == ["report", "--app-setting", "shortcutOpenPanel=on", "--app-setting", "shortcutNextAccount=off"])
 
     print("Account")
     let b = s.account(B)!

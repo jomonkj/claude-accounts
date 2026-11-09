@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import ClaudeAccountsCore
 
-/// The Settings window: General, Accounts, Sync, Backups, Advanced.
+/// The Settings window: General, Accounts, Sync, Backups, Advanced, About.
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @State var tab: String = "general"
@@ -14,6 +14,7 @@ struct SettingsView: View {
             SyncTab().tabItem { Label("Sync", systemImage: "arrow.triangle.2.circlepath") }.tag("sync")
             BackupsTab().tabItem { Label("Backups", systemImage: "externaldrive") }.tag("backups")
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
+            AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
         .frame(width: 620, height: 440)
         .environmentObject(store)
@@ -40,6 +41,22 @@ struct EngineToggle: View {
     }
 }
 
+/// On/off switch for one keyboard shortcut. Works from any app.
+struct ShortcutToggle: View {
+    @EnvironmentObject var store: Store
+    let key: HotKeys.Key
+    let title: String
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { key.isOn }, set: { store.setShortcut(key, $0) })) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(title)  \(key.label)")
+                Text("Works from any app. Turn it off if another app uses this key.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 struct GeneralTab: View {
     @EnvironmentObject var store: Store
     var body: some View {
@@ -55,6 +72,10 @@ struct GeneralTab: View {
                          key: "showNameInMenuBar", value: \.showNameInMenuBar)
             EngineToggle(title: "Save logins automatically", help: "Every 5 minutes, save the login Claude uses now.",
                          key: "autoSaveLogins", value: \.autoSaveLogins)
+            Section("Keyboard shortcuts") {
+                ShortcutToggle(key: .openPanel, title: "Open the panel")
+                ShortcutToggle(key: .nextAccount, title: "Switch to the next account")
+            }
             Section("Updates") {
                 HStack {
                     if let u = store.update {
@@ -88,9 +109,10 @@ struct AccountsTab: View {
     @EnvironmentObject var store: Store
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Table(store.accounts) {
+            Table(of: Account.self) {
                 TableColumn("Account") { a in
                     HStack(spacing: 8) {
+                        if store.isPinned(a) { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary) }
                         Avatar(account: a, size: 22)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(a.title).lineLimit(1).truncationMode(.middle)
@@ -112,20 +134,17 @@ struct AccountsTab: View {
                         .labelsHidden().disabled(a.current)
                 }.width(40)
                 TableColumn("") { a in
-                    Menu {
-                        Button("Rename…") { store.rename(a) }
-                        if a.savedLogin { Button("Forget saved login…") { store.forget(a) } }
-                        Button("Copy account ID") {
-                            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(a.id, forType: .string)
-                        }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    Menu { AccountMenu(account: a) } label: { Image(systemName: "ellipsis.circle") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }.width(30)
+            } rows: {
+                ForEach(store.accounts) { a in TableRow(a).draggable(a.id) }
+                    .dropDestination(for: String.self) { index, ids in store.reorder(ids, to: index) }
             }
             HStack {
                 Button { store.addAccount() } label: { Label("Add account…", systemImage: "person.badge.plus") }
                 Spacer()
-                Text("Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
+                Text("Drag to sort. Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding()
@@ -181,8 +200,8 @@ struct BackupsTab: View {
             .formStyle(.grouped).frame(height: 130)
             List(store.backups, id: \.name, selection: $selection) { b in
                 HStack {
-                    Image(systemName: b.isUndo ? "arrow.uturn.backward.circle" : "calendar")
-                    Text(b.isUndo ? "Before restore \(b.name.dropFirst("pre-restore-".count))" : b.name)
+                    Image(systemName: b.isUndo ? "arrow.uturn.backward.circle" : b.isRemoved ? "person.badge.minus" : "calendar")
+                    Text(b.title)
                     Spacer()
                     Text("\(b.sessions) sessions").monospacedDigit().foregroundStyle(.secondary)
                 }
@@ -191,7 +210,7 @@ struct BackupsTab: View {
             HStack {
                 Button("Back up now") { Task { store.backup(); await store.loadBackups() } }
                 Button("Restore selected…") {
-                    if let name = selection { store.restore(name) }
+                    if let b = store.backups.first(where: { $0.name == selection }) { store.restore(b) }
                 }.disabled(selection == nil)
                 Spacer()
                 Button("Show in Finder") {
@@ -237,5 +256,46 @@ struct AdvancedTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+struct AboutTab: View {
+    @EnvironmentObject var store: Store
+    @State var reportMessage = ""
+
+    var body: some View {
+        Form {
+            Section("Claude Accounts") {
+                LabeledContent("Version", value: Store.version)
+                Text("Unofficial. Not made by or affiliated with Anthropic.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Text("MIT License. Copyright 2026 Jomon Johnson.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Report a problem") {
+                Text("The debug report has the app and Claude versions, the layout check, the settings (with the keyboard shortcuts) and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button("Copy debug report") { Task { reportMessage = await store.copyDebugReport() } }
+                    Text(reportMessage).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            UninstallSection()
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct UninstallSection: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        Section("Uninstall") {
+            HStack {
+                Text("Remove the app, the login item and the CLI commands. Saved logins and backups stay.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("Uninstall…") { store.uninstall() }  // the engine refuses while a switch runs
+            }
+        }
     }
 }

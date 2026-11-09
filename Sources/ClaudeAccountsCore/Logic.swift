@@ -1,5 +1,13 @@
 import Foundation
 
+/// The debug renders (--render, --render-settings, --render-sync, --render-welcome) for the README
+/// screenshots. A render draws one PNG and exits: no notifications, timer, shortcuts or welcome window.
+public enum RenderMode {
+    public static func isOn(_ arguments: [String] = CommandLine.arguments) -> Bool {
+        arguments.contains { $0.hasPrefix("--render") }
+    }
+}
+
 /// Derived state the UI shows. Pure functions, so CoreTests can check them.
 public extension Status {
     var currentAccount: Account? { accounts.first(where: { $0.current }) }
@@ -10,6 +18,42 @@ public extension Status {
     func visibleAccounts(showHidden: Bool) -> [Account] {
         accounts.filter { showHidden || !$0.hidden || $0.current }
     }
+
+    /// Accounts in panel order: pinned accounts first, then the saved order, then accounts
+    /// not in the saved order (new ones) in engine order. The panel, Settings and the
+    /// next-account shortcut all use this order.
+    func panelOrder(showHidden: Bool) -> [Account] {
+        let rank = Dictionary(settings.order.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let pinned = Set(settings.pinned)
+        func key(_ e: (offset: Int, element: Account)) -> (Int, Int, Int) {
+            (pinned.contains(e.element.id) ? 0 : 1, rank[e.element.id] ?? Int.max, e.offset)
+        }
+        return visibleAccounts(showHidden: showHidden).enumerated()
+            .sorted { key($0) < key($1) }
+            .map(\.element)
+    }
+
+    /// The full saved order after a drag in Settings: `ids` move to `index` of the panel order
+    /// with hidden accounts shown (an insert index, as in a SwiftUI drop).
+    func orderAfterMove(_ ids: [String], to index: Int) -> [String] {
+        let all = panelOrder(showHidden: true).map(\.id)
+        let moving = all.filter { ids.contains($0) }
+        let before = all.prefix(max(0, min(index, all.count))).filter { ids.contains($0) }.count
+        var rest = all.filter { !ids.contains($0) }
+        rest.insert(contentsOf: moving, at: max(0, min(index - before, rest.count)))
+        return rest
+    }
+
+    /// The account the next-account shortcut switches to: the first account after the current one
+    /// in panel order that is mine and has a saved login. Wraps from the last account to the first.
+    /// Nil when no other account fits.
+    func nextAccount(showHidden: Bool) -> Account? {
+        let list = panelOrder(showHidden: showHidden)
+        let start = list.firstIndex(where: { $0.current }).map { $0 + 1 } ?? 0
+        return (list[start...] + list[..<start]).first { !$0.current && $0.owned && $0.savedLogin }
+    }
+
+    func isPinned(_ id: String) -> Bool { settings.pinned.contains(id) }
 
     var hiddenCount: Int { accounts.filter { $0.hidden && !$0.current }.count }
 
@@ -42,6 +86,11 @@ public extension Status {
     static func recoverMessage(_ json: [String: Any]) -> String? {
         guard json["recovered"] as? Bool == true else { return nil }
         let step = json["step"] as? String ?? "?"
+        if json["op"] as? String == "remove" {
+            return json["action"] as? String == "finished"
+                ? "A removal of an account stopped in the middle. It is now finished. Its sessions are in the backups."
+                : "A removal of an account stopped before it changed anything. The account is unchanged."
+        }
         switch json["action"] as? String {
         case "rolled back": return "A switch stopped in the middle (after \(step)). Your previous login is back."
         case "finished": return "A switch stopped in the middle (after \(step)). It is now finished."
@@ -49,7 +98,42 @@ public extension Status {
         }
     }
 
+    /// Claude must always keep its signed-in account, so the current account cannot be removed.
+    func canRemove(_ a: Account) -> Bool { !a.current }
+
+    /// Why `a` cannot be removed now, or nil when it can. `status` is nil before the first refresh.
+    static func removeRefusal(_ status: Status?, _ a: Account) -> String? {
+        guard let status else { return "The app has not read the accounts yet. Try again in a moment." }
+        return status.canRemove(a) ? nil : "You cannot remove the current account. Switch to another account first."
+    }
+
+    /// Title and text of the confirm dialog for `claude-switch remove`.
+    func removeConfirmation(_ a: Account) -> (title: String, text: String) {
+        ("Remove \(a.title)?",
+         "The app deletes the saved login, the name and the settings of this account. "
+         + "Sync no longer uses it. Its sessions move into the backups. "
+         + "To get them back, restore \"Removed account \(a.id.prefix(8))\" in Backups.\n\n"
+         + "The account comes back only when you sign in to it again in Claude.")
+    }
+
+    /// Banner for the result of `claude-switch save-login <account>`, or nil while Claude is not signed in yet.
+    static func signInResult(_ json: [String: Any], title: String) -> Banner? {
+        if json["saved"] as? Bool == true {
+            return .success("Login of \(title) is saved. You can now switch to it with one click.")
+        }
+        if json["match"] as? Bool == false {
+            return .warning(json["message"] as? String ?? "Claude is signed in to another account. The login of \(title) was not saved.")
+        }
+        return nil
+    }
+
     var ownedAccounts: [Account] { accounts.filter(\.owned) }
+
+    /// Engine arguments for the debug report. The app adds the settings only it knows
+    /// (the keyboard shortcuts), as on/off.
+    static func reportArguments(appSettings: [(String, Bool)]) -> [String] {
+        ["report"] + appSettings.flatMap { ["--app-setting", "\($0.0)=\($0.1 ? "on" : "off")"] }
+    }
 
     /// Lines for the sync preview, for example "jomon@example.com: 16 sessions". Accounts with 0 changes are left out.
     func syncPreview(_ r: SyncResult) -> [String] {
@@ -76,6 +160,32 @@ public extension Status {
         let who = account(p.account)?.title ?? String(p.account.prefix(8))
         let reset = p.resets.isEmpty ? "" : " Resets \(p.resets)."
         return ("Usage limit reached", "\"\(p.title)\" stopped on \(who).\(reset)")
+    }
+
+    /// Grey line under an account that hit its limit, for example "Limit resets 4:50 PM".
+    /// Nil when the account has no known reset time that is still in the future.
+    func resetLine(for accountID: String, now: Date = Date(), timeZone: TimeZone = .current) -> String? {
+        let next = paused.filter { $0.account == accountID }
+            .compactMap(\.resetsAt).filter { $0 > now.timeIntervalSince1970 }.max()
+        return next.map { "Limit resets " + Self.resetTime(Date(timeIntervalSince1970: $0), now: now, timeZone: timeZone) }
+    }
+
+    /// Second line of a paused session row: the reset time while it is in the future, then the account.
+    func pausedSubtitle(_ p: PausedSession, now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        let who = account(p.account)?.shortTitle ?? String(p.account.prefix(8))
+        guard let at = p.resetsAt, at > now.timeIntervalSince1970 else { return "Limit reached · \(who)" }
+        return "Limit resets " + Self.resetTime(Date(timeIntervalSince1970: at), now: now, timeZone: timeZone) + " · \(who)"
+    }
+
+    /// "4:50 PM" today, else "Sun 4:50 PM".
+    static func resetTime(_ t: Date, now: Date, timeZone: TimeZone) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = timeZone
+        f.dateFormat = cal.isDate(t, inSameDayAs: now) ? "h:mm a" : "EEE h:mm a"
+        return f.string(from: t)
     }
 
     /// Sessions that are paused now but were not paused in `previous`.

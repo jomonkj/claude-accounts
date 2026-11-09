@@ -10,6 +10,7 @@ Commands (all print JSON unless noted):
   switch <account> [--force]  quit Claude, save this login, load <account>, open Claude
   verify <account>            wait until Claude runs signed in as <account>
   add [--force]               quit Claude, save this login, open Claude signed out
+  save-login <account>        save the login if Claude is signed in to <account> (sign in to save)
   recover                     finish or roll back a switch that stopped in the middle
   sync [--dry-run]            two-way sync of session lists between "mine" accounts
   share [--dry-run]           old name for sync
@@ -20,15 +21,22 @@ Commands (all print JSON unless noted):
   backup                      copy all session lists to ~/Backups/claude-sessions
   label [<account>] <name>    name an account (no account = current one)
   forget <account>            delete the saved login of an account
+  remove <account>            remove an account: its login, name and settings; its sessions
+                              move into the backups (restore them from there)
   hide|unhide <account>       hide an account from the list
+  order <account>...          set the account order in the panel (new accounts go last)
+  pin|unpin <account>         pin an account to the top of the panel
   set <key> <value>           change a setting (true/false or a number)
   open-session <session-id>   open a session in Claude
   update-check <version>      is a newer GitHub Release out? (uses gh)
   update-install <tag>        download, check and install a release, then reopen the app
+  uninstall                   remove the app, the login item and the CLI links (keeps saved logins and backups)
+  report [--app-setting k=v]  debug report as text, with no emails and no account IDs
+                              (the app adds its own settings, such as the keyboard shortcuts)
 
 <account> is a full account UUID or its first 8 characters.
 """
-import contextlib, datetime, fcntl, glob, json, os, plistlib, re, shutil, sqlite3, subprocess, sys, time
+import contextlib, datetime, fcntl, glob, json, os, platform, plistlib, re, shutil, sqlite3, subprocess, sys, time
 
 HOME = os.path.expanduser("~")
 APP = os.environ.get("CLAUDE_APP_DIR", f"{HOME}/Library/Application Support/Claude")
@@ -57,8 +65,8 @@ LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
 CONFIG_KEYS = ["oauth:tokenCacheV2", "lastKnownAccountUuid"]
 DEFAULTS = {"syncOnSwitch": False, "autoSaveLogins": True, "dailyBackup": True,
             "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {},
-            "owned": [], "syncConfirmed": False}
-LIST_KEYS = ("hidden", "labels", "owned")
+            "owned": [], "syncConfirmed": False, "order": [], "pinned": []}
+LIST_KEYS = ("hidden", "labels", "owned", "order", "pinned")
 
 os.umask(0o077)
 os.makedirs(PROFILES, exist_ok=True)
@@ -66,6 +74,10 @@ os.makedirs(PROFILES, exist_ok=True)
 
 class Fail(Exception):
     pass
+
+
+class Busy(Fail):
+    """The lock is held: a switch, the 5-minute tick or another engine task runs now."""
 
 
 # ---------- small helpers ----------
@@ -105,6 +117,8 @@ def settings():
     s["owned"] = list(s.get("owned") or [])
     s["labels"] = dict(s.get("labels") or {})
     s["hidden"] = list(s.get("hidden") or [])
+    s["order"] = list(s.get("order") or [])
+    s["pinned"] = list(s.get("pinned") or [])
     if os.path.exists(OLD_LABELS) and not s.get("importedV1Labels"):  # names from version 1
         for line in open(OLD_LABELS):
             p = line.rstrip("\n").split(" ", 1)
@@ -125,7 +139,7 @@ def lock():
     try:
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        raise Fail("Another switch is running. Wait for it to finish.")
+        raise Busy("Another switch is running. Wait for it to finish.")
     try:
         yield
     finally:
@@ -329,8 +343,8 @@ def has_login(app=APP):
 # ---------- saving and loading a login ----------
 
 def save_login(dest, mode):
-    """Copy the login of the desktop app into folder `dest`. mode: switch | auto."""
-    live = mode == "auto"
+    """Copy the login of the desktop app into folder `dest`. mode: switch | auto | signin."""
+    live = mode in ("auto", "signin")  # Claude may be running
     tmp = dest + ".tmp"
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
@@ -468,6 +482,60 @@ def transcript_tail(cli_id, size=65536):
     return []
 
 
+MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+RESET_RE = re.compile(r"^(?:at\s+)?(?:(?P<mon>[A-Za-z]{3})[a-z]*\s+(?P<day>\d{1,2}),?\s+|(?P<wday>[A-Za-z]{3})[a-z]*,?\s+)?"
+                      r"(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ap>[ap]m)\s*(?:\((?P<tz>[A-Za-z0-9_+\-/]+)\))?\s*$", re.I)
+
+
+def reset_timestamp(text, stopped_at):
+    """Epoch seconds of a reset text such as "8pm (Asia/Calcutta)" or "Nov 10, 5pm (America/New_York)".
+    The reset is the first such time after stopped_at (ISO time). None when the text cannot be read."""
+    m = RESET_RE.match((text or "").strip())
+    if not m:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(m["tz"]) if m["tz"] else None
+        ref = datetime.datetime.fromisoformat(stopped_at.replace("Z", "+00:00")) if stopped_at else None
+    except Exception:
+        return None
+    if ref is None or ref.tzinfo is None:
+        ref = datetime.datetime.now(datetime.timezone.utc)
+    ref = ref.astimezone(tz) if tz else ref.astimezone()
+    h, mi = int(m["h"]), int(m["m"] or 0)
+    if not (1 <= h <= 12 and mi < 60):
+        return None
+    h = h % 12 + (12 if m["ap"].lower() == "pm" else 0)
+
+    def at(day):
+        # Build the wall time in the zone, then fold it into the zone (handles DST offsets).
+        naive = datetime.datetime(day.year, day.month, day.day, h, mi)
+        return naive.replace(tzinfo=tz) if tz else naive.astimezone()
+
+    if m["mon"]:
+        if m["mon"].lower() not in MONTHS:
+            return None
+        mon, day = MONTHS.index(m["mon"].lower()) + 1, int(m["day"])
+        for year in (ref.year, ref.year + 1):
+            with contextlib.suppress(ValueError):
+                t = at(datetime.date(year, mon, day))
+                if t > ref - datetime.timedelta(days=1):
+                    return int(t.timestamp())
+        return None
+    want = None
+    if m["wday"]:
+        if m["wday"].lower() not in WEEKDAYS:
+            return None
+        want = WEEKDAYS.index(m["wday"].lower())
+    for add in range(8):
+        d = ref.date() + datetime.timedelta(days=add)
+        t = at(d)
+        if t > ref and (want is None or d.weekday() == want):
+            return int(t.timestamp())
+    return None
+
+
 def paused_sessions(days=3):
     """Sessions whose last turn ended on a usage-limit error."""
     newest = {}
@@ -497,9 +565,11 @@ def paused_sessions(days=3):
         if "limit" not in text.lower():
             continue
         reset = re.search(r"resets? ([^·\n]+)", text)
+        resets = reset.group(1).strip() if reset else ""
+        stopped = last.get("timestamp", "")
         out.append({"id": sid, "title": d.get("title") or "Untitled", "account": f.split(os.sep)[-3],
-                    "cwd": d.get("cwd", ""), "message": text.strip()[:160],
-                    "resets": reset.group(1).strip() if reset else "", "stoppedAt": last.get("timestamp", "")})
+                    "cwd": d.get("cwd", ""), "message": text.strip()[:160], "resets": resets,
+                    "resetsAt": reset_timestamp(resets, stopped), "stoppedAt": stopped})
     out.sort(key=lambda x: x["stoppedAt"], reverse=True)
     return out
 
@@ -510,28 +580,70 @@ def list_backups():
     out = []
     for d in sorted(os.listdir(BACKUPS), reverse=True):
         p = os.path.join(BACKUPS, d)
-        if os.path.isdir(p) and (re.fullmatch(r"\d{4}-\d\d-\d\d", d) or d.startswith("pre-restore-")):
+        info = backup_kind(d)
+        if os.path.isdir(p) and info:
             n = sum(1 for _ in glob.glob(os.path.join(p, "*", "*", "local_*.json")))
-            out.append({"name": d, "sessions": n, "modified": os.path.getmtime(p)})
+            out.append({"name": d, **info, "sessions": n, "modified": os.path.getmtime(p)})
+    return out
+
+
+def backup_kind(name):
+    """{"kind": daily | pre-restore | removed, "time": shown time, "account": 8 characters (removed)}
+    from a backup folder name, or None when the folder is not a backup."""
+    if re.fullmatch(r"\d{4}-\d\d-\d\d", name):
+        return {"kind": "daily", "time": name}
+    m = re.fullmatch(r"(pre-restore|removed)-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)?(?:-(\w+))?", name)
+    if not m or (m[1] == "removed") != bool(m[8]):
+        return None
+    out = {"kind": m[1], "time": f"{m[2]}-{m[3]}-{m[4]} {m[5]}:{m[6]}"}
+    if m[8]:
+        out["account"] = m[8]
     return out
 
 
 def restore(name):
     require_no_pending()
-    if name not in {b["name"] for b in list_backups()}:
+    b = next((b for b in list_backups() if b["name"] == name), None)
+    if not b:
         raise Fail(f"No backup named {name}.")
+    if b["kind"] == "removed":
+        return restore_removed(name)
     with lock():
         running = claude_running()
         quit_claude()
-        undo = f"pre-restore-{datetime.datetime.now():%Y%m%d-%H%M%S}"
-        subprocess.run(["rsync", "-a", SESS + "/", os.path.join(BACKUPS, undo) + "/"], check=True)
+        undo = pre_restore_backup()
         subprocess.run(["rsync", "-a", "--delete", os.path.join(BACKUPS, name) + "/", SESS + "/"], check=True)
-        pre = sorted(d for d in os.listdir(BACKUPS) if d.startswith("pre-restore-"))
-        for old in pre[:-3]:
-            shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
         if running:
             open_claude()
     log(f"restored backup {name} (undo: {undo})")
+    return {"ok": True, "restored": name, "undo": undo}
+
+
+def pre_restore_backup():
+    """Copy the session lists to a "pre-restore-…" backup (the undo of a restore). Keeps the last 3."""
+    undo = f"pre-restore-{datetime.datetime.now():%Y%m%d-%H%M%S}"
+    os.makedirs(BACKUPS, exist_ok=True)
+    if os.path.isdir(SESS):
+        subprocess.run(["rsync", "-a", SESS + "/", os.path.join(BACKUPS, undo) + "/"], check=True)
+    pre = sorted(d for d in os.listdir(BACKUPS) if d.startswith("pre-restore-"))
+    for old in pre[:-3]:
+        shutil.rmtree(os.path.join(BACKUPS, old), ignore_errors=True)
+    return undo
+
+
+def restore_removed(name):
+    """Put the session folder of a removed account back. Other accounts are not touched.
+    The account comes back as "not mine" and without a saved login. A file that is newer
+    in Claude (the user signed in to the account again) is kept: only missing and older
+    files are copied."""
+    src = os.path.join(BACKUPS, name)
+    with lock():
+        undo = pre_restore_backup()
+        for acc in os.listdir(src):
+            if os.path.isdir(os.path.join(src, acc)):
+                subprocess.run(["rsync", "-a", "--update", os.path.join(src, acc) + "/", os.path.join(SESS, acc) + "/"],
+                               check=True)
+    log(f"restored removed account from backup {name} (undo: {undo})")
     return {"ok": True, "restored": name, "undo": undo}
 
 
@@ -587,6 +699,90 @@ def status():
             "switchRunning": running, "pendingRecovery": pending() is not None and not running,
             "settings": {k: val for k, val in s.items() if k not in ("labels", "importedV1Labels", "verifiedVersions", "owned")},
             "accounts": accounts, "paused": paused_sessions()}
+
+
+EMAIL_RE = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+UUID_RE = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+TOKEN_RE = re.compile(rf"{EMAIL_RE}|{UUID_RE}|(?<![0-9A-Za-z])[0-9a-fA-F]{{8}}(?![0-9A-Za-z])")
+
+
+def redact(text, accounts, emails):
+    """Replace each email and account ID (full or 8 characters) with "account N".
+    The same account gets the same N everywhere in the text: an ID is known by its first
+    8 characters, and a known email by its account. `emails` is {email: account}."""
+    text = re.sub(r"/Users/[^/\s]+", "~", text.replace(HOME, "~"))
+    known = {a[:8].lower() for a in accounts}
+    by_email = {e.lower(): a[:8].lower() for e, a in emails.items()}
+    names = {}
+
+    def sub(m):
+        t = m.group(0).lower()
+        if "@" not in t and len(t) == 8 and t.isdigit() and t not in known:
+            return m.group(0)  # an 8-digit number, not an ID
+        k = by_email.get(t, t) if "@" in t else t[:8]
+        return names.setdefault(k, f"account {len(names) + 1}")
+
+    return TOKEN_RE.sub(sub, text)
+
+
+def app_version():
+    """Version of the Claude Accounts app that holds this engine (Contents/Resources/claude-switch)."""
+    plist = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "Info.plist")
+    try:
+        with open(plist, "rb") as f:
+            return plistlib.load(f).get("CFBundleShortVersionString", "") or "unknown"
+    except (OSError, plistlib.InvalidFileException, ValueError):
+        return "unknown (not run from the app)"
+
+
+def log_tail(n=200):
+    lines = []
+    for path in (LOG + ".1", LOG):  # the rotated log first, so the lines stay in order
+        with contextlib.suppress(OSError), open(path, errors="replace") as f:
+            lines += f.read().splitlines()
+    return lines[-n:]
+
+
+def report(app_settings=None):
+    """A debug report to attach to a GitHub issue, with no emails and no account IDs.
+    `app_settings` ({key: value}) are settings only the app knows, such as the keyboard shortcuts."""
+    st = status()
+    s = st["settings"]
+    yn = lambda b: "yes" if b else "no"
+    out = ["Claude Accounts debug report",
+           f"Created: {datetime.datetime.now():%F %T}",
+           f"App version: {app_version()}",
+           f"macOS: {platform.mac_ver()[0] or 'unknown'} ({platform.machine()})",
+           f"Claude version: {st['claudeVersion'] or 'not found'} (tested: {yn(st['versionTested'])})",
+           "Layout check: " + ("; ".join(st["layoutProblems"]) or "known"),
+           f"Claude running: {yn(st['claudeRunning'])}, signed in: {yn(st['signedIn'])}",
+           f"Switch running: {yn(st['switchRunning'])}, pending recovery: {yn(st['pendingRecovery'])}",
+           "", "Settings:"]
+    out += [f"  {k}: {json.dumps(v)}" for k, v in sorted(s.items())]
+    owned = settings()["owned"]
+    out += [f"  owned: {json.dumps(owned)}"]
+    out += [f"  {k}: {v}" for k, v in sorted((app_settings or {}).items())] or ["  shortcut settings: see the app"]
+    out += ["", "Accounts:"]
+    for a in st["accounts"]:
+        flags = [f for f, on in (("current", a["current"]), ("mine", a["owned"]), ("hidden", a["hidden"]),
+                                 ("saved login", a["savedLogin"])) if on]
+        out.append(f"  {a['id']}: {a['sessions']} sessions" + (", " + ", ".join(flags) if flags else ""))
+    if not st["accounts"]:
+        out.append("  none")
+    out += ["", f"Paused sessions: {len(st['paused'])}", "", "Last log lines:"]
+    out += ["  " + line for line in log_tail()]
+    accounts = {a["id"] for a in st["accounts"]} | set(owned) | set(s["hidden"])
+    return redact("\n".join(out) + "\n", accounts, account_emails(st))
+
+
+def account_emails(st):
+    """{email: account} from the claude CLI and from the account names in status
+    (a name is often the email), so an email and its account ID get the same placeholder."""
+    out = {e: a for a, e in cli_emails().items()}
+    for a in st["accounts"]:
+        for e in re.findall(EMAIL_RE, a.get("name") or ""):
+            out.setdefault(e, a["id"])
+    return out
 
 
 def cmd_list():
@@ -676,6 +872,126 @@ def add(force=False):
     return {"ok": True, **({"warning": warn} if warn else {})}
 
 
+# Steps of a removal, in journal order. Before the session folder is in the backups,
+# recover rolls back (nothing of the account changed); after, it finishes the removal.
+REMOVE_STEPS = ("started", "backed-up", "moved", "login-deleted", "settings-cleaned")
+
+
+def move_dir(src, dest):
+    """Move a folder. Atomic on one volume; else copy to dest.tmp, rename, then delete src."""
+    if not (TEST and os.environ.get("CLAUDE_SWITCH_TEST_COPY_MOVE")):  # test seam: force the copy
+        try:
+            os.rename(src, dest)
+            return
+        except OSError:
+            pass
+    tmp = dest + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.copytree(src, tmp, symlinks=True)
+    crash_point("copied")
+    os.rename(tmp, dest)
+    crash_point("renamed")
+    shutil.rmtree(src)
+
+
+def drop_from_settings(acc):
+    """Remove an account from every account setting: labels, owned, hidden, order, pinned."""
+    s = settings()
+    for k in LIST_KEYS:
+        v = s.get(k)
+        if isinstance(v, list):
+            s[k] = [x for x in v if x != acc]
+        elif isinstance(v, dict):
+            v.pop(acc, None)
+    save_settings(s)
+
+
+def finish_remove(j):
+    """Idempotent rest of a removal, once the session folder is in the backups."""
+    acc, dest = j["target"], j["dest"]
+    src = os.path.join(SESS, acc)
+    if os.path.isdir(src):  # the copy is complete (dest exists), the old folder is not deleted yet
+        shutil.rmtree(src)
+    checkpoint("moved")
+    shutil.rmtree(os.path.join(PROFILES, acc), ignore_errors=True)
+    checkpoint("login-deleted")
+    drop_from_settings(acc)
+    checkpoint("settings-cleaned")
+
+
+def remove(acc):
+    acc = resolve(acc)
+    with lock():  # check inside the lock: a running switch changes the current account
+        require_no_pending()
+        if acc == current_account():
+            raise Fail("This is the current account of Claude. Switch to another account first, then remove it.")
+        log(f"remove account {acc}")
+        name = f"removed-{datetime.datetime.now():%Y%m%d-%H%M%S}-{acc[:8]}"
+        dest = os.path.join(BACKUPS, name)
+        j = {"target": acc, "dest": dest, "name": name}
+        checkpoint("started", op="remove", **j)
+        if os.path.isdir(SESS):
+            backup(settings()["backupKeep"])
+        checkpoint("backed-up")
+        src = os.path.join(SESS, acc)
+        if os.path.isdir(src):
+            os.makedirs(dest, exist_ok=True)
+            move_dir(src, os.path.join(dest, acc))
+        finish_remove({**j, "dest": dest})
+        end_journal()
+    log(f"removed account {acc} (sessions in backup {name})")
+    return {"ok": True, "account": acc, "backup": name}
+
+
+def recover_remove(j):
+    """A removal stopped in the middle: finish it if the session folder is safe in the
+    backups, else undo the partial copy so the account is untouched."""
+    acc, dest = j.get("target") or "", j.get("dest") or ""
+    moved = os.path.isdir(os.path.join(dest, acc)) if acc and dest else False
+    if acc and (moved or j.get("step") in REMOVE_STEPS[2:]):
+        finish_remove(j)
+        return "finished"
+    if dest:
+        shutil.rmtree(os.path.join(dest, acc) + ".tmp", ignore_errors=True)
+        with contextlib.suppress(OSError):
+            os.rmdir(dest)
+    return "rolled back"
+
+
+def save_signed_in(target):
+    """Step 3 of "Sign in to save": save the login only if Claude is signed in to `target`."""
+    target = resolve(target)
+    cur = current_account()
+    if not cur or not has_login():
+        return {"ok": True, "saved": False, "waiting": True}
+    if cur != target:
+        log(f"sign in to save: expected {target}, Claude is on {cur}")
+        return {"ok": True, "saved": False, "match": False, "expected": target, "current": cur,
+                "message": f"Claude is signed in to another account ({cur[:8]}). Nothing was saved. "
+                           "In Claude, sign out. Then sign in to the account you picked."}
+    try:
+        with lock():
+            if pending():
+                raise Busy("A switch is not finished.")
+            saved = save_live_login(target, "signin")
+    except Busy:  # the tick or a switch runs now: the app asks again in a moment
+        return {"ok": True, "saved": False, "waiting": True, "busy": True}
+    if not saved:  # Claude changed account or signed out since the check above
+        return {"ok": True, "saved": False, "waiting": True}
+    return {"ok": True, "saved": True, "match": True, "account": target}
+
+
+def save_live_login(acc, mode):
+    """Save the login Claude uses now (Claude may run) as the login of `acc`. Used by the tick
+    (mode "auto") and by Sign in to save ("signin"). The caller holds the lock. Saves nothing
+    during an unfinished switch or when Claude is not signed in to `acc`. True when saved."""
+    if pending() or current_account() != acc or not has_login():
+        return False
+    save_login(os.path.join(PROFILES, acc), mode)
+    log(f"saved login of {acc} ({mode})")
+    return True
+
+
 def recover():
     j = pending()
     if not j:
@@ -684,14 +1000,17 @@ def recover():
         return {"ok": True, "recovered": False, "running": True}  # the switch is still going
     with lock():
         step = j.get("step")
-        if step in ("loaded", "synced"):
+        if j.get("op") == "remove":
+            action = recover_remove(j)
+        elif step in ("loaded", "synced"):
             action = "finished"            # the target login is complete
         elif step == "saved" and os.path.isdir(LAST_STATE):
             load_login(LAST_STATE)         # the target login may be half loaded
             action = "rolled back"
         else:
             action = "nothing to undo"     # no file was changed yet
-        open_claude()
+        if j.get("op") != "remove":    # a removal does not quit Claude
+            open_claude()
         end_journal()
     log(f"recover: {action} ({j.get('op')} to {j.get('target')}, stopped after {step})")
     return {"ok": True, "recovered": True, "action": action, "step": step,
@@ -728,17 +1047,15 @@ def tick():
             if pending():
                 return {"done": []}  # never save a half-switched login
             cur = current_account()
-            if s["autoSaveLogins"] and cur and claude_running() and has_login():
+            if s["autoSaveLogins"] and cur and claude_running():
                 meta = profile_meta(cur)
-                if not meta or time.time() - meta.get("savedAt", 0) > 6 * 3600:
-                    save_login(os.path.join(PROFILES, cur), "auto")
-                    log(f"auto-saved login of {cur}")
+                if (not meta or time.time() - meta.get("savedAt", 0) > 6 * 3600) and save_live_login(cur, "auto"):
                     done.append("login")
             today = os.path.join(BACKUPS, f"{datetime.date.today():%Y-%m-%d}")
             if s["dailyBackup"] and not os.path.isdir(today) and os.path.isdir(SESS):
                 backup(s["backupKeep"])
                 done.append("backup")
-    except Fail:
+    except Busy:
         pass  # a switch is running; try next time
     return {"done": done}
 
@@ -786,6 +1103,104 @@ def update_install(tag):
     return {"ok": True, "tag": tag}
 
 
+AGENT_LABEL = "local.claude-accounts"
+
+
+def uninstall():
+    """Remove the app, the login item and the CLI links. Keep the data folder and the backups.
+
+    The app copies: ~/Applications (install-release.sh), /Applications (a drag-install) and the
+    bundle this engine runs from. In test mode the steps that act outside $HOME (launchctl, pkill,
+    the Finder Trash) are not run: they are listed in `stubbed`, and the app goes to $HOME/.Trash.
+    If an app copy cannot be removed, the result is an error that names it and lists what was removed.
+    """
+    import pwd
+    if TEST and os.path.realpath(HOME) == os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir):
+        raise Fail("Test mode needs a temporary HOME. Nothing was changed.")
+    apps = app_copies()
+    agent = os.path.join(HOME, "Library", "LaunchAgents", AGENT_LABEL + ".plist")
+    stop = [["/bin/launchctl", "bootout", f"gui/{os.getuid()}/{AGENT_LABEL}"], ["/usr/bin/pkill", "-x", "ClaudeAccounts"]]
+    with lock():
+        require_no_pending()
+        removed = []
+        for name in ("claude-switch", "claude-accounts"):
+            link = os.path.join(HOME, ".local", "bin", name)
+            # Only our own links: never delete a file the user put there.
+            if os.path.islink(link) and "Claude Accounts.app" in os.readlink(link):
+                os.remove(link); removed.append(link)
+        if os.path.exists(agent):
+            os.remove(agent); removed.append(agent)
+        remaining = []
+        for app in apps:
+            try:
+                trash_item(app); removed.append(app)
+            except Fail as e:
+                remaining.append(app); log(f"uninstall: {e}")
+        log("uninstalled: " + ", ".join(removed))
+    if remaining:  # the app is still there: do not stop it, and do not say it is gone
+        raise Fail("Not finished. These app copies are still there: " + ", ".join(remaining)
+                   + ". Move them to the Trash yourself. Removed: " + (", ".join(removed) or "nothing") + ".")
+    out = {"ok": True, "removed": removed, "data": BASE, "backups": BACKUPS}
+    if TEST:
+        out["stubbed"] = [" ".join([os.path.basename(c[0])] + c[1:]) for c in stop]
+        return out
+    # Stop the login item and the app last: the app may be our parent, so print the result first.
+    print(json.dumps(out), flush=True)
+    with contextlib.suppress(OSError):
+        os.setsid()
+    for c in stop:
+        subprocess.run(c, capture_output=True)
+    return None
+
+
+APP_NAME = "Claude Accounts.app"
+
+
+def own_bundle():
+    """The app bundle this engine runs from (Contents/Resources/claude-switch), or None."""
+    res = os.path.dirname(os.path.realpath(__file__))
+    bundle = os.path.dirname(os.path.dirname(res))
+    if os.path.basename(res) != "Resources" or not bundle.endswith(".app"):
+        return None
+    with contextlib.suppress(OSError, plistlib.InvalidFileException, ValueError):
+        with open(os.path.join(bundle, "Contents", "Info.plist"), "rb") as f:
+            if plistlib.load(f).get("CFBundleIdentifier") == AGENT_LABEL:  # our bundle ID
+                return bundle
+    return None
+
+
+def app_copies():
+    """Every copy of the app to remove, without duplicates."""
+    system = os.environ.get("CLAUDE_SWITCH_APPLICATIONS", "/Applications") if TEST else "/Applications"
+    out = []
+    for p in (os.path.join(HOME, "Applications", APP_NAME), os.path.join(system, APP_NAME), own_bundle()):
+        if p and os.path.isdir(p) and os.path.realpath(p) not in {os.path.realpath(o) for o in out}:
+            out.append(p)
+    return out
+
+
+def trash_item(path):
+    if TEST:
+        trash = os.path.join(HOME, ".Trash")
+        os.makedirs(trash, exist_ok=True)
+        dest, n = os.path.join(trash, os.path.basename(path)), 1
+        while os.path.exists(dest):
+            n += 1
+            dest = os.path.join(trash, f"{os.path.basename(path)[:-4]} {n}.app")
+        try:
+            os.rename(path, dest)
+        except OSError as e:
+            raise Fail(f"Cannot move {path} to the Trash: {e.strerror}")
+        return
+    # NSFileManager puts it in the Trash with "Put Back", and needs no Finder automation permission.
+    js = ("ObjC.import('Foundation');var e=$();"
+          "if(!$.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError("
+          "$.NSURL.fileURLWithPath(" + json.dumps(path) + "),null,e))throw new Error('trash failed')")
+    r = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", js], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise Fail(f"Cannot move the app to the Trash: {r.stderr.strip()}")
+
+
 def main(argv):
     cmd, args = (argv[1] if len(argv) > 1 else "status"), argv[2:]
     if os.path.basename(argv[0]) == "claude-accounts" and len(argv) == 1:
@@ -802,6 +1217,8 @@ def main(argv):
         out = verify(args[0] if args else "")
     elif cmd == "add":
         out = add(force="--force" in args)
+    elif cmd == "save-login":
+        out = save_signed_in(args[0] if args else "")
     elif cmd == "recover":
         out = recover()
     elif cmd in ("sync", "share"):
@@ -829,20 +1246,45 @@ def main(argv):
         acc = resolve(args[0] if args else "")
         shutil.rmtree(os.path.join(PROFILES, acc), ignore_errors=True)
         log(f"forgot login of {acc}"); out = {"ok": True}
+    elif cmd == "remove":
+        out = remove(args[0] if args else "")
     elif cmd in ("hide", "unhide"):
         acc = resolve(args[0] if args else "")
         h = set(s["hidden"]); (h.add if cmd == "hide" else h.discard)(acc)
         s["hidden"] = sorted(h); save_settings(s); out = {"ok": True}
+    elif cmd == "order":
+        order = [resolve(a) for a in args]
+        if len(set(order)) != len(order):
+            raise Fail("Each account can be in the order only once.")
+        s["order"] = order; save_settings(s); out = {"ok": True}
+    elif cmd in ("pin", "unpin"):
+        acc = resolve(args[0] if args else "")
+        p = [a for a in s["pinned"] if a != acc]
+        s["pinned"] = p + [acc] if cmd == "pin" else p
+        save_settings(s); out = {"ok": True}
     elif cmd == "set":
         if len(args) != 2 or args[0] not in DEFAULTS or args[0] in LIST_KEYS:
             raise Fail("Usage: set <" + "|".join(k for k in DEFAULTS if k not in LIST_KEYS) + "> <value>")
         v = args[1].lower()
         s[args[0]] = v in ("1", "true", "on", "yes") if isinstance(DEFAULTS[args[0]], bool) else int(v)
         save_settings(s); out = {"ok": True}
+    elif cmd == "report":
+        app = {}
+        for i, a in enumerate(args):
+            if a == "--app-setting":
+                m = re.fullmatch(r"(\w+)=(\w+)", args[i + 1] if i + 1 < len(args) else "")
+                if not m:
+                    raise Fail("Usage: report [--app-setting <key>=<value>]...")
+                app[m[1]] = m[2]
+        sys.stdout.write(report(app)); return 0
     elif cmd == "update-check":
         out = update_check(args[0] if args else "0.0.0")
     elif cmd == "update-install":
         out = update_install(args[0] if args else "")
+    elif cmd == "uninstall":
+        out = uninstall()
+        if out is None:  # already printed
+            return 0
     elif cmd == "open-session":
         open_claude(f"claude://claude.ai/epitaxy/{args[0]}"); out = {"ok": True}
     else:
