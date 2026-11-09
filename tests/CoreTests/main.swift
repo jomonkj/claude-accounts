@@ -84,13 +84,15 @@ func main() async {
     check("sync preview: biggest first, names, no zero lines",
           s.syncPreview(preview) == ["jomon@example.com (Team): 16 sessions", "Account aaaa1111: 4 sessions"])
     let backups = try! JSONDecoder().decode([BackupInfo].self, from: Data(
-        #"[{"name": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "sessions": 9, "modified": 2}]"#.utf8))
-    check("undo backup is marked", backups.map(\.isUndo) == [false, true])
+        #"[{"name": "2026-11-08", "kind": "daily", "time": "2026-11-08", "sessions": 10, "modified": 1}, {"name": "pre-restore-20261108-1200", "kind": "pre-restore", "time": "2026-11-08 12:00", "sessions": 9, "modified": 2}]"#.utf8))
+    check("undo backup is marked by its kind", backups.map(\.isUndo) == [false, true])
     let removedBackup = try! JSONDecoder().decode(BackupInfo.self, from: Data(
-        #"{"name": "removed-20261108-123456-bbbb2222", "sessions": 3, "modified": 3}"#.utf8))
-    check("removed-account backup is marked", removedBackup.isRemoved && !removedBackup.isUndo && !backups[0].isRemoved)
-    check("backup titles", backups.map(\.title) == ["2026-11-08", "Before restore 20261108-1200"])
+        #"{"name": "removed-x", "kind": "removed", "time": "2026-11-08 12:34", "account": "bbbb2222", "sessions": 3, "modified": 3}"#.utf8))
+    check("removed-account backup is marked by its kind", removedBackup.isRemoved && !removedBackup.isUndo && !backups[0].isRemoved)
+    check("backup titles", backups.map(\.title) == ["2026-11-08", "Before restore 2026-11-08 12:00"])
     check("removed-account backup title", removedBackup.title == "Removed account bbbb2222 (2026-11-08 12:34)")
+    let oldEngine = try! JSONDecoder().decode(BackupInfo.self, from: Data(#"{"name": "2026-11-07", "sessions": 1, "modified": 1}"#.utf8))
+    check("backup without a kind (older engine) is a plain backup", oldEngine.title == "2026-11-07" && !oldEngine.isUndo)
 
     check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
     check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)

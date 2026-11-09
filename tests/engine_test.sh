@@ -220,6 +220,12 @@ check "removal is in the log" 'grep -q "removed account $D" "$CLAUDE_SWITCH_HOME
 E sync >/dev/null
 check "sync does not bring the folder back" '[ ! -e "$S/$D" ]'
 check "backups lists the removed account" 'E backups | grep -q "\"name\": \"$bk\""'
+kinds() { E backups | /usr/bin/python3 -c "
+import json,sys
+for b in json.load(sys.stdin)['backups']: print(b['name'], b.get('kind'), b.get('account', '-'), b.get('time', '-'))"; }
+check "backup kind: removed, with account and time" 'kinds | grep -qE "^$bk removed DDDDDDDD [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"'
+check "backup kind: daily" 'kinds | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2} daily - [0-9]{4}-[0-9]{2}-[0-9]{2}$"'
+check "backup kind: pre-restore" 'kinds | grep -qE "^pre-restore-[0-9-]+ pre-restore - [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}$"'
 o_before="$(others)"
 E restore "$bk" >/dev/null
 check "restore brings the sessions back" '[ -f "$S/$D/org4/local_d1.json" ] && [ -f "$S/$D/org4/local_d2.json" ]'

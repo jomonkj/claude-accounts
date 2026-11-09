@@ -580,17 +580,33 @@ def list_backups():
     out = []
     for d in sorted(os.listdir(BACKUPS), reverse=True):
         p = os.path.join(BACKUPS, d)
-        if os.path.isdir(p) and (re.fullmatch(r"\d{4}-\d\d-\d\d", d) or d.startswith(("pre-restore-", "removed-"))):
+        info = backup_kind(d)
+        if os.path.isdir(p) and info:
             n = sum(1 for _ in glob.glob(os.path.join(p, "*", "*", "local_*.json")))
-            out.append({"name": d, "sessions": n, "modified": os.path.getmtime(p)})
+            out.append({"name": d, **info, "sessions": n, "modified": os.path.getmtime(p)})
+    return out
+
+
+def backup_kind(name):
+    """{"kind": daily | pre-restore | removed, "time": shown time, "account": 8 characters (removed)}
+    from a backup folder name, or None when the folder is not a backup."""
+    if re.fullmatch(r"\d{4}-\d\d-\d\d", name):
+        return {"kind": "daily", "time": name}
+    m = re.fullmatch(r"(pre-restore|removed)-(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)?(?:-(\w+))?", name)
+    if not m or (m[1] == "removed") != bool(m[8]):
+        return None
+    out = {"kind": m[1], "time": f"{m[2]}-{m[3]}-{m[4]} {m[5]}:{m[6]}"}
+    if m[8]:
+        out["account"] = m[8]
     return out
 
 
 def restore(name):
     require_no_pending()
-    if name not in {b["name"] for b in list_backups()}:
+    b = next((b for b in list_backups() if b["name"] == name), None)
+    if not b:
         raise Fail(f"No backup named {name}.")
-    if name.startswith("removed-"):
+    if b["kind"] == "removed":
         return restore_removed(name)
     with lock():
         running = claude_running()

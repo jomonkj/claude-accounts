@@ -397,7 +397,7 @@ final class Store: ObservableObject {
 
     func restore(_ b: BackupInfo) {
         guard Dialog.confirm("Restore the backup \(b.title)?", b.isRemoved
-            ? "The sessions of the removed account come back. Other accounts do not change. The account comes back as not mine and without a saved login."
+            ? "The sessions of the removed account come back. Newer session files stay. Other accounts do not change. The account comes back as not mine and without a saved login."
             : "The session lists of all accounts go back to this backup. The current state is backed up first, so you can undo this. Claude quits and opens again.",
             ok: "Restore") else { return }
         Task {
@@ -408,8 +408,8 @@ final class Store: ObservableObject {
 
     private func restoreDone(_ b: BackupInfo, _ out: [String: Any]?) async {
         guard let out else { return }
-        banner = .success(b.isRemoved ? "The sessions of the removed account are back."
-            : "Restored \(b.title). To undo, restore \"Before restore\" (\(out["undo"] as? String ?? "")).")
+        let undo = "To undo, restore \"Before restore\" (\(out["undo"] as? String ?? ""))."
+        banner = .success(b.isRemoved ? "The sessions of the removed account are back. \(undo)" : "Restored \(b.title). \(undo)")
     }
 
     /// Copies the engine's debug report (no emails, no account IDs) to the clipboard.
