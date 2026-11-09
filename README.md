@@ -105,7 +105,7 @@ The install links two commands: `claude-accounts` (a table of accounts) and `cla
 | `set <key> <value>` | Change a setting |
 | `recover` | Finish or roll back a switch that stopped in the middle |
 | `report` | Debug report with no emails and no account IDs |
-| `uninstall` | Remove the app, the login item and the CLI links |
+| `uninstall` | Remove the app (in ~/Applications and /Applications), the login item and the CLI links |
 
 Example:
 
