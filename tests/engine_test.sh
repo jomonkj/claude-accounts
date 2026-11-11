@@ -107,6 +107,32 @@ mkdir -p "$HOME/.claude-b"; echo '{"oauthAccount":{"accountUuid":"AAAAAAAA-1","e
 E label AAAAAAAA "" >/dev/null
 check "email from a second CLI config folder" 'E status | grep -q b@example.com'
 
+echo "account details"
+# acct <id prefix> <python expression on the account dict "a"> -> prints the result
+acct() { E status | /usr/bin/python3 -c "import json,sys;a=[x for x in json.load(sys.stdin)['accounts'] if x['id'].startswith('$1')][0];print($2)"; }
+echo '{"oauthAccount":{"accountUuid":"BBBBBBBB-2","emailAddress":"bb@example.com","displayName":"Bee","organizationName":"Bee Org","organizationType":"claude_max","userRateLimitTier":"default_claude_max_20x"}}' > "$HOME/.claude.json"
+check "details from the CLI config" '[ "$(acct BBBB "a[\"details\"]")" = "{'"'"'email'"'"': '"'"'bb@example.com'"'"', '"'"'displayName'"'"': '"'"'Bee'"'"', '"'"'plan'"'"': '"'"'Max 20x'"'"', '"'"'orgName'"'"': '"'"'Bee Org'"'"'}" ]'
+check "only the email when the CLI config has no more" '[ "$(acct AAAA "a[\"details\"]")" = "{'"'"'email'"'"': '"'"'b@example.com'"'"', '"'"'displayName'"'"': None, '"'"'plan'"'"': None, '"'"'orgName'"'"': None}" ]'
+mkdir -p "$A/claude-code-sessions/CCCCCCCC-3/org3"
+check "all details null without CLI config" '[ "$(acct CCCC "list(a[\"details\"].values())")" = "[None, None, None, None]" ]'
+plan_of() { # <organizationType> <userRateLimitTier> -> plan text of account B
+  echo "{\"oauthAccount\":{\"accountUuid\":\"BBBBBBBB-2\",\"organizationType\":\"$1\",\"userRateLimitTier\":\"$2\"}}" > "$HOME/.claude.json"
+  acct BBBB 'a["details"]["plan"]'
+}
+check "plan Max 5x" '[ "$(plan_of claude_max default_claude_max_5x)" = "Max 5x" ]'
+check "plan Pro" '[ "$(plan_of claude_pro default_claude_ai)" = "Pro" ]'
+check "plan Team with a 5x seat" '[ "$(plan_of claude_team default_claude_max_5x)" = "Team (5x)" ]'
+check "plan Team standard seat" '[ "$(plan_of claude_team default_raven)" = "Team" ]'
+check "plan Enterprise" '[ "$(plan_of claude_enterprise default_raven)" = "Enterprise" ]'
+check "unknown plan type shown in words" '[ "$(plan_of claude_free_trial x)" = "Free Trial" ]'
+check "no plan type is null" '[ "$(plan_of "" "")" = None ]'
+echo 'not json' > "$HOME/.claude.json"; mkdir -p "$HOME/.claude-c"; echo '{"oauthAccount": 5}' > "$HOME/.claude-c/.claude.json"
+check "bad CLI config does not break status" 'E status >/dev/null && [ "$(acct BBBB "a[\"details\"][\"email\"]")" = None ]'
+rm -rf "$HOME/.claude-c" "$HOME/.claude.json"
+check "switch time recorded for each account" '[ "$(acct AAAA "a[\"switchedAt\"] > 0")" = True ] && [ "$(acct BBBB "a[\"switchedAt\"] > 0")" = True ]'
+check "no switch time for an account never switched to" '[ "$(acct CCCC "a[\"switchedAt\"]")" = 0 ]'
+rm -rf "$A/claude-code-sessions/CCCCCCCC-3"
+
 echo "tick auto-saves a running login"
 touch "$A/.running"; E tick >/dev/null
 check "recent login not saved again" 'grep -q switch "$CLAUDE_SWITCH_HOME/profiles/BBBBBBBB-2/meta.json"'

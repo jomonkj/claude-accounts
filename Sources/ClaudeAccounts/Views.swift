@@ -67,6 +67,9 @@ struct AccountRow: View {
                                 .help("Marked as mine: sync includes this account")
                         }
                     }
+                    if let line = account.detailsLine {
+                        Text(line).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
                     Text("\(account.sessions) sessions · \(account.lastUsedText)")
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     Text(account.loginText)
