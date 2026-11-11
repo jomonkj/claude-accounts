@@ -12,8 +12,34 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public let current: Bool
     public let hidden: Bool
     public let owned: Bool
+    /// Last switch to this account (epoch seconds); 0 or nil when never.
+    public let switchedAt: Double?
+    /// From the Claude Code sign-in data; nil from an older engine.
+    public let details: AccountDetails?
 
     public var title: String { name.isEmpty ? "Account \(id.prefix(8))" : name }
+
+    /// Text for a field with no data.
+    public static let none = "—"
+    public var planText: String { details?.plan ?? Self.none }
+    public var orgText: String { details?.orgName ?? Self.none }
+    public var displayNameText: String { details?.displayName ?? Self.none }
+    public var emailText: String { details?.email ?? Self.none }
+    public var switchedText: String { (switchedAt ?? 0) > 0 ? Self.relative(switchedAt!) : Self.none }
+
+    /// Panel line: email (when the title does not already have it), plan and organization, only the
+    /// fields that are known. Nil when none is known.
+    public var detailsLine: String? {
+        let email = details?.email.flatMap { name.contains($0) ? nil : $0 }
+        let parts = [email, details?.plan, details?.orgName].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Second line in Settings → Accounts: display name, email (when not in the title), short ID.
+    public var settingsSubtitle: String {
+        let email = details?.email.flatMap { name.contains($0) ? nil : $0 }
+        return ([details?.displayName, email].compactMap { $0 } + [String(id.prefix(8))]).joined(separator: " · ")
+    }
 
     /// Short name for the menu bar: first word of the name, or the first 4 characters of the ID.
     public var shortTitle: String {
@@ -44,6 +70,14 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public static func relative(_ t: Double, now: Date = Date()) -> String {
         RelativeDateTimeFormatter().localizedString(for: Date(timeIntervalSince1970: t), relativeTo: now)
     }
+}
+
+/// What the Claude Code sign-in data says about an account. Each field may be nil.
+public struct AccountDetails: Decodable, Equatable, Sendable {
+    public let email: String?
+    public let displayName: String?
+    public let plan: String?
+    public let orgName: String?
 }
 
 /// A session whose last turn ended on a usage-limit error.

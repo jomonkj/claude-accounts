@@ -668,23 +668,67 @@ def backup(keep):
 
 # ---------- commands ----------
 
-def cli_emails():
-    """Account emails known to the claude CLI: ~/.claude.json and ~/.claude-*/.claude.json
-    (one per CLAUDE_CONFIG_DIR, for example the claude-b launcher)."""
+def cli_accounts():
+    """{account: oauthAccount} known to the claude CLI: ~/.claude.json and ~/.claude-*/.claude.json
+    (one per CLAUDE_CONFIG_DIR, for example the claude-b launcher). The first file wins."""
     out = {}
     for path in [CLI_JSON] + sorted(glob.glob(f"{HOME}/.claude-*/.claude.json")):
-        o = (read_json(path, {}) or {}).get("oauthAccount") or {}
-        if o.get("accountUuid") and o.get("emailAddress"):
-            out.setdefault(o["accountUuid"], o["emailAddress"])
+        data = read_json(path, {})
+        o = data.get("oauthAccount") if isinstance(data, dict) else None
+        if isinstance(o, dict) and isinstance(o.get("accountUuid"), str):
+            out.setdefault(o["accountUuid"], o)
     return out
+
+
+def cli_emails():
+    return {a: o["emailAddress"] for a, o in cli_accounts().items() if isinstance(o.get("emailAddress"), str) and o["emailAddress"]}
+
+
+def plan_text(o):
+    """Plan name from the CLI oauthAccount: organizationType, plus the Max multiplier
+    from userRateLimitTier. None when the type is not known."""
+    kind = o.get("organizationType")
+    if not isinstance(kind, str) or not kind:
+        return None
+    tier = o.get("userRateLimitTier") if isinstance(o.get("userRateLimitTier"), str) else ""
+    mult = next((m for m in ("20x", "5x") if tier.endswith("_max_" + m)), None)
+    base = {"claude_max": "Max", "claude_pro": "Pro", "claude_team": "Team",
+            "claude_enterprise": "Enterprise"}.get(kind) or kind.removeprefix("claude_").replace("_", " ").title()
+    if base == "Max":
+        return f"Max {mult}" if mult else "Max"
+    return f"{base} ({mult})" if mult and base in ("Team", "Enterprise") else base
+
+
+def account_details(o):
+    """{email, displayName, plan, orgName} from the CLI oauthAccount; each field may be None."""
+    text = lambda k: o.get(k) if isinstance(o.get(k), str) and o.get(k) else None
+    return {"email": text("emailAddress"), "displayName": text("displayName"),
+            "plan": plan_text(o), "orgName": text("organizationName")}
+
+
+SWITCHED = os.path.join(BASE, "switched.json")
+
+
+def switch_times():
+    """{account: epoch seconds of the last switch to it}."""
+    data = read_json(SWITCHED, {})
+    return {a: t for a, t in data.items() if isinstance(t, (int, float))} if isinstance(data, dict) else {}
+
+
+def remember_switch(target):
+    times = switch_times()
+    times[target] = time.time()
+    write_json(SWITCHED, times)
 
 
 def status():
     s = settings()
     cur = current_account()
     labels = dict(s["labels"])
+    cli = cli_accounts()
     for acc, email in cli_emails().items():
         labels.setdefault(acc, email)
+    switched = switch_times()
     dirs = account_dirs()
     accounts = []
     for a in known_accounts():
@@ -696,6 +740,7 @@ def status():
             "savedLogin": meta is not None, "savedAt": (meta or {}).get("savedAt", 0),
             "savedMode": (meta or {}).get("mode", ""),
             "current": a == cur, "hidden": a in s["hidden"], "owned": a in s["owned"],
+            "switchedAt": switched.get(a, 0), "details": account_details(cli.get(a, {})),
         })
     accounts.sort(key=lambda x: (not x["current"], -x["sessions"], -x["lastUsed"], x["id"]))
     v = claude_version()
@@ -829,6 +874,7 @@ def switch(target, force=False):
         checkpoint("synced")
         open_claude()
         end_journal()
+        remember_switch(target)
     log(f"switched to {target}")
     out = {"ok": True, "account": target, "shared": shared}
     if warn:

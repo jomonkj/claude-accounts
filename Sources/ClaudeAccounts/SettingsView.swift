@@ -16,7 +16,7 @@ struct SettingsView: View {
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
             AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
-        .frame(width: 620, height: 440)
+        .frame(width: 720, height: 440)
         // Checkboxes, not switches: the first switch the app draws costs about 50 MB of graphics
         // memory while the window opens and about 5 MB after it closes (issue #22).
         .toggleStyle(.checkbox)
@@ -119,12 +119,21 @@ struct AccountsTab: View {
                         Avatar(account: a, size: 22)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(a.title).lineLimit(1).truncationMode(.middle)
-                            Text(a.id.prefix(8)).font(.caption2).foregroundStyle(.secondary)
+                            Text(a.settingsSubtitle).font(.caption2).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
                         }
                     }
+                    .help("Organization: \(a.orgText)")
                 }
-                .width(min: 200, ideal: 230, max: 260)
+                .width(min: 180, ideal: 200, max: 240)
+                TableColumn("Plan") { a in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(a.planText).lineLimit(1)
+                        Text(a.orgText).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                    }
+                }.width(min: 80, ideal: 95)
                 TableColumn("Sessions") { a in Text("\(a.sessions)").monospacedDigit() }.width(60)
+                TableColumn("Last switch") { a in Text(a.switchedText).lineLimit(1) }.width(min: 70, ideal: 80)
                 TableColumn("Login") { a in
                     Text(a.savedLogin ? (a.current ? "Active" : "Saved") : "—")
                         .foregroundStyle(a.savedLogin ? .green : .secondary)

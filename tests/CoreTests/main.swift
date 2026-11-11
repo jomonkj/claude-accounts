@@ -217,6 +217,22 @@ func main() async {
     check("login text for auto save", s.currentAccount!.loginText.hasSuffix("(auto)"))
     check("never used text", s.account("cccc3333-0000-0000-0000-000000000000")?.lastUsedText == "never used")
 
+    print("Account details")
+    let a = s.currentAccount!, c = s.account("cccc3333-0000-0000-0000-000000000000")!
+    check("decodes details", b.details?.plan == "Team (5x)" && b.details?.orgName == "Example Co")
+    check("missing details and switch time decode as nil", c.details == nil && c.switchedAt == nil)
+    check("plan text", b.planText == "Team (5x)")
+    check("null plan shows a dash", a.planText == "—" && c.planText == "—")
+    check("null org shows a dash", a.orgText == "—")
+    check("null display name shows a dash", a.displayNameText == "—")
+    check("email text", a.emailText == "a@example.com" && c.emailText == "—")
+    check("never switched shows a dash", b.switchedText == "—" && c.switchedText == "—")
+    check("switch time is relative", a.switchedText.hasSuffix("ago"))
+    check("panel details line skips an email that is the title", b.detailsLine == "Team (5x) · Example Co")
+    check("panel details line shows only known fields", a.detailsLine == "a@example.com")
+    check("no panel details line without details", c.detailsLine == nil)
+    check("settings subtitle has name, email and short ID", b.settingsSubtitle == "Jomon · bbbb2222")
+
     try? FileManager.default.removeItem(at: log)
     print("\n\(passed) passed, \(failed) failed")
     exit(failed == 0 ? 0 : 1)
