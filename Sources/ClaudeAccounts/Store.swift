@@ -118,6 +118,26 @@ final class Store: ObservableObject {
         liveUsageProblem = nil
         let merged = LiveUsageCache.merge(liveCache, result, now: Date().timeIntervalSince1970)
         if merged != liveCache { liveCache = merged; saveLiveCache() }
+        warnIfNearLimit()
+    }
+
+    /// The 90% warning is on by default (Settings → General); an app setting, like the shortcuts.
+    static let usageWarningKey = "usageWarning"
+    var usageWarningOn: Bool { UserDefaults.standard.object(forKey: Self.usageWarningKey) as? Bool ?? true }
+
+    func setUsageWarning(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: Self.usageWarningKey)
+        objectWillChange.send()
+    }
+
+    /// Send the 90% warning once for each 5-hour window of the active account.
+    private func warnIfNearLimit() {
+        let warnedKey = "usageWarningsSent"
+        let warned = Set(UserDefaults.standard.stringArray(forKey: warnedKey) ?? [])
+        guard let s = status, let w = s.usageWarning(cache: liveCache, enabled: usageWarningOn, alreadyWarned: warned)
+        else { return }
+        UserDefaults.standard.set(Array((warned.union([w.key])).sorted().suffix(200)), forKey: warnedKey)
+        notifier.usageWarning(w, targetTitle: w.target.flatMap { s.account($0)?.shortTitle })
     }
 
     private static func loadLiveCache() -> [String: CachedUsage] {

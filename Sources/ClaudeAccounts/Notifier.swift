@@ -61,6 +61,26 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
+    /// The 90% warning, with a Switch button for the account with the most free capacity.
+    /// The click shows the normal switch confirmation; the app never switches by itself.
+    func usageWarning(_ w: UsageWarning, targetTitle: String?) {
+        guard started, allowed, let center else { return }
+        let category = "usage-warning"
+        let actions = w.target.map {
+            [UNNotificationAction(identifier: "switch:\($0)", title: "Switch to \(targetTitle ?? "account")", options: [.foreground])]
+        } ?? []
+        center.getNotificationCategories { cats in
+            var all = cats.filter { $0.identifier != category }
+            all.insert(UNNotificationCategory(identifier: category, actions: actions, intentIdentifiers: []))
+            center.setNotificationCategories(all)
+            let content = UNMutableNotificationContent()
+            content.title = w.title
+            content.body = w.body
+            content.categoryIdentifier = category
+            center.add(UNNotificationRequest(identifier: category, content: content, trigger: nil))
+        }
+    }
+
     func say(_ title: String, _ body: String) {
         guard started, allowed, let center else { return }
         let c = UNMutableNotificationContent()

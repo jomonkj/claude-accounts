@@ -262,6 +262,16 @@ public enum LiveUsageCache {
     }
 }
 
+/// A warning that the active account is near its 5-hour limit (90% or more).
+public struct UsageWarning: Equatable, Sendable {
+    /// The account and its 5-hour window: one warning for each key.
+    public let key: String
+    public let title: String
+    public let body: String
+    /// The "mine" account with the most free capacity, or nil when none has free capacity.
+    public let target: String?
+}
+
 /// When live usage is read again: every 10 minutes, and when the panel opens if the last read
 /// is 2 minutes old or more. Never more often than every 2 minutes.
 public enum LiveSchedule {
