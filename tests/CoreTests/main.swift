@@ -259,6 +259,10 @@ func main() async {
     check("panel details line skips an email that is the title", b.detailsLine == "Team (5x) · Example Co")
     check("panel details line shows only known fields", a.detailsLine == "a@example.com")
     check("no panel details line without details", c.detailsLine == nil)
+    let labelled = variant { $0[1]["name"] = "Work" }
+    let clock = Date(timeIntervalSince1970: 1794100000)
+    check("a time slightly in the future reads as past, not \"in 0 seconds\"", !Account.relative(1794100000.4, now: clock).hasPrefix("in "))
+    check("panel details line: plan and org first, email last", labelled.account(B)!.detailsLine == "Team (5x) · Example Co · jomon@example.com")
     check("settings subtitle has name, email and short ID", b.settingsSubtitle == "Jomon · bbbb2222")
 
     try? FileManager.default.removeItem(at: log)

@@ -37,11 +37,12 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
         return l.windowName + " · " + f.localizedString(for: Date(timeIntervalSince1970: l.hitAt), relativeTo: now)
     }
 
-    /// Panel line: email (when the title does not already have it), plan and organization, only the
-    /// fields that are known. Nil when none is known.
+    /// Panel line: plan, organization, then email (when the title does not already have it), only
+    /// the fields that are known. The email goes last, so a long line cuts the email, not the plan.
+    /// Nil when none is known.
     public var detailsLine: String? {
         let email = details?.email.flatMap { name.contains($0) ? nil : $0 }
-        let parts = [email, details?.plan, details?.orgName].compactMap { $0 }
+        let parts = [details?.plan, details?.orgName, email].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -77,8 +78,10 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
         return "Login saved " + Self.relative(savedAt) + (savedMode == "auto" ? " (auto)" : "")
     }
 
+    /// A time a little ahead of the clock (a file written this second) counts as 1 second ago, so the text
+    /// never reads "in 0 seconds".
     public static func relative(_ t: Double, now: Date = Date()) -> String {
-        RelativeDateTimeFormatter().localizedString(for: Date(timeIntervalSince1970: t), relativeTo: now)
+        RelativeDateTimeFormatter().localizedString(for: Date(timeIntervalSince1970: min(t, now.timeIntervalSince1970 - 1)), relativeTo: now)
     }
 }
 
