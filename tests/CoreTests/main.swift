@@ -307,14 +307,29 @@ func main() async {
     check("fetch: an account without a login sends no request", usage["cccc3333-0000-0000-0000-000000000000"]?.error == "no-login")
     check("fetch: a network error is network", usage[B]?.error == "network" && usage[A]?.ok == true)
     check("live usage setting decoded", s.settings.liveUsageOn)
-    check("panel bars: 5h and Week, in that order", s.liveState(for: A, usage: usage) == .bars([
-        UsageBar(label: "5h", percent: 42.4), UsageBar(label: "Week", percent: 16)]))
-    check("bar text is a whole percent", UsageBar(label: "5h", percent: 42.4).text == "42%")
-    check("bar fill stays in 0...1", UsageBar(label: "x", percent: 130).fraction == 1 && UsageBar(label: "x", percent: -5).fraction == 0)
+    let t0: Double = 1794133200  // 2026-11-08 3:50 PM in Asia/Calcutta; the session resets at 4:50 PM
+    let ist2 = TimeZone(identifier: "Asia/Calcutta")!
+    let cache = LiveUsageCache.merge([:], usage, now: t0)
+    func state(_ st: Status, _ id: String, _ c: [String: CachedUsage], at: Double = t0) -> LiveRowState? {
+        st.liveState(for: id, cache: c, now: Date(timeIntervalSince1970: at), timeZone: ist2)
+    }
+    check("panel bars: 5h, Week, then the scoped limit with its model name", state(s, A, cache) == .bars([
+        UsageBar(label: "5h", percent: 42.4, resetText: "4:50 PM"), UsageBar(label: "Week", percent: 16, resetText: "Mon 8:30 PM"),
+        UsageBar(label: "Fable", percent: 29, resetText: nil), UsageBar(label: "New Kind", percent: 3, resetText: nil)], lastRead: nil, reason: nil))
+    let scoped = LiveUsageCache.merge([:], [A: LiveAccountUsage(ok: true, limits: [
+        LiveLimit(kind: "weekly_scoped", percent: 5, resetsAt: nil, label: nil),
+        LiveLimit(kind: "session", percent: 1, resetsAt: t0 - 60, label: nil)], error: nil)], now: t0)
+    check("a scoped limit with no model name; a reset in the past is not shown", state(s, A, scoped) == .bars([
+        UsageBar(label: "5h", percent: 1, resetText: nil), UsageBar(label: "Scoped", percent: 5, resetText: nil)], lastRead: nil, reason: nil))
+    check("the reset shows on a high or critical bar only",
+          UsageBar(label: "x", percent: 69, resetText: "4:50 PM").showsReset == false
+          && UsageBar(label: "x", percent: 70, resetText: "4:50 PM").showsReset && UsageBar(label: "x", percent: 95, resetText: nil).showsReset == false)
+    check("bar text is a whole percent", UsageBar(label: "5h", percent: 42.4, resetText: nil).text == "42%")
+    check("bar fill stays in 0...1", UsageBar(label: "x", percent: 130, resetText: nil).fraction == 1 && UsageBar(label: "x", percent: -5, resetText: nil).fraction == 0)
     check("levels: normal below 70, high from 70, critical from 90",
           [69.4, 70, 89.9, 90, 100].map { UsageLevel(percent: $0) } == [.normal, .high, .high, .critical, .critical])
-    check("a failed account is unavailable, with the reason in words",
-          s.liveState(for: B, usage: usage) == .unavailable("No connection to claude.ai."))
+    check("a failed account with no earlier value is unavailable, with the reason in words",
+          state(s, B, cache) == .unavailable("No connection to claude.ai."))
     check("reasons for each error type", ["http-403", "http-401", "no-login", "decrypt", "not-json", "http-500"].map(LiveAccountUsage.reason) == [
         "claude.ai refused the request (HTTP 403).",
         "The saved login has expired. Switch to this account to sign in again.",
@@ -322,14 +337,33 @@ func main() async {
         "The saved login could not be read.",
         "claude.ai sent an unexpected answer.",
         "claude.ai answered with an error (HTTP 500)."])
-    check("an answer with no known limit is unavailable",
-          s.liveState(for: A, usage: [A: LiveAccountUsage(ok: true, limits: [LiveLimit(kind: "other", percent: 1, resetsAt: nil, label: nil)], error: nil)])
+    check("an answer with no limit at all is unavailable",
+          state(s, A, LiveUsageCache.merge([:], [A: LiveAccountUsage(ok: true, limits: [], error: nil)], now: t0))
           == .unavailable("claude.ai sent no usage for this account."))
-    check("no state for an account that was not asked", s.liveState(for: "dddd", usage: usage) == nil)
+    check("no state for an account that was not asked", state(s, "dddd", cache) == nil)
+
+    print("Live usage cache and schedule")
+    check("a good read stores the limits and the read time", cache[A]?.readAt == t0 && cache[A]?.error == nil && cache[A]?.limits.count == 4)
+    let later = LiveUsageCache.merge(cache, [A: .failed("http-403")], now: t0 + 1500)
+    check("a failure keeps the last value and its read time", later[A]?.limits == cache[A]?.limits && later[A]?.readAt == t0 && later[A]?.error == "http-403")
+    check("an account no longer asked is dropped", later[B] == nil)
+    check("the old value shows with its age and the reason", state(s, A, later, at: t0 + 1500) == .bars([
+        UsageBar(label: "5h", percent: 42.4, resetText: "4:50 PM"), UsageBar(label: "Week", percent: 16, resetText: "Mon 8:30 PM"),
+        UsageBar(label: "Fable", percent: 29, resetText: nil), UsageBar(label: "New Kind", percent: 3, resetText: nil)],
+        lastRead: "Last read 25 min. ago", reason: "claude.ai refused the request (HTTP 403)."))
+    let saved = String(decoding: try! JSONEncoder().encode(later), as: UTF8.self)
+    check("the cache holds only kinds, percents, resets, read time and error type", !saved.contains("cookie") && !saved.contains("FAKE")
+          && Set((try! JSONSerialization.jsonObject(with: Data(saved.utf8)) as! [String: [String: Any]])[A]!.keys) == ["limits", "readAt", "error"])
+    check("the cache reads back", (try? JSONDecoder().decode([String: CachedUsage].self, from: Data(saved.utf8))) == later)
+    check("schedule: the first read is always due", LiveSchedule.due(lastAttempt: nil, now: t0, panelOpened: false))
+    check("schedule: opening the panel reads again after 2 minutes, not before",
+          !LiveSchedule.due(lastAttempt: t0, now: t0 + 119, panelOpened: true) && LiveSchedule.due(lastAttempt: t0, now: t0 + 120, panelOpened: true))
+    check("schedule: the timer reads every 10 minutes, not before",
+          !LiveSchedule.due(lastAttempt: t0, now: t0 + 599, panelOpened: false) && LiveSchedule.due(lastAttempt: t0, now: t0 + 600, panelOpened: false))
     let offStatus = try! JSONDecoder().decode(Status.self, from: Data(
         String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
             .replacingOccurrences(of: "\"liveUsage\": true", with: "\"liveUsage\": false").utf8))
-    check("no state when the setting is off", offStatus.liveState(for: A, usage: usage) == nil)
+    check("no state when the setting is off", state(offStatus, A, cache) == nil)
     let demo = try? JSONDecoder().decode([String: LiveAccountUsage].self, from: Data(#"{"a":{"ok":true,"error":null,"limits":[{"kind":"session","percent":12,"resetsAt":null,"label":null}]}}"#.utf8))
     check("live usage decodes (demo renders)", demo?["a"]?.limit("session")?.percent == 12)
     let oldSettings = try! JSONDecoder().decode(EngineSettings.self, from: Data(#"{"syncOnSwitch":false,"syncConfirmed":false,"autoSaveLogins":true,"dailyBackup":true,"backupKeep":7,"showNameInMenuBar":true,"hidden":[],"order":[],"pinned":[]}"#.utf8))

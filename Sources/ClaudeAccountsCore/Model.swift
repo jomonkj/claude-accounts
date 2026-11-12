@@ -198,23 +198,84 @@ public enum UsageLevel: Equatable, Sendable {
 public struct UsageBar: Equatable, Sendable {
     public let label: String
     public let percent: Double
+    /// When the limit resets, for example "4:50 PM" or "Mon 8:30 PM"; nil when not known or past.
+    public let resetText: String?
 
-    public init(label: String, percent: Double) { self.label = label; self.percent = percent }
+    public init(label: String, percent: Double, resetText: String?) {
+        self.label = label; self.percent = percent; self.resetText = resetText
+    }
 
     public var text: String { "\(Int(percent.rounded()))%" }
     public var fraction: Double { min(max(percent / 100, 0), 1) }
     public var level: UsageLevel { UsageLevel(percent: percent) }
+    /// The panel shows the reset time next to a high or critical bar, where it matters.
+    public var showsReset: Bool { level != .normal && resetText != nil }
+
+    /// The bar label of a limit kind: "5h", "Week", the model name of a scoped limit, or the
+    /// kind in words for a kind this app does not know yet.
+    public static func label(kind: String, model: String?) -> String {
+        switch kind {
+        case "session": "5h"
+        case "weekly_all": "Week"
+        case "weekly_scoped": model ?? "Scoped"
+        default: kind.split(separator: "_").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+        }
+    }
 }
 
 /// What the panel shows for live usage under one account.
 public enum LiveRowState: Equatable, Sendable {
-    case bars([UsageBar])
+    /// `lastRead` ("Last read 25 min. ago") and `reason` are set when the newest read failed
+    /// and the bars show the last good value.
+    case bars([UsageBar], lastRead: String?, reason: String?)
     /// The reason in plain words.
     case unavailable(String)
 }
 
+/// The last good live usage of one account, kept between reads and app launches.
+/// It holds no cookie: only limits, the read time and the newest error type.
+public struct CachedUsage: Codable, Equatable, Sendable {
+    public let limits: [LiveLimit]
+    /// When `limits` was read (epoch seconds); 0 when never.
+    public let readAt: Double
+    /// The newest read's error type, when it failed; nil when the newest read was good.
+    public let error: String?
+
+    public init(limits: [LiveLimit], readAt: Double, error: String?) {
+        self.limits = limits; self.readAt = readAt; self.error = error
+    }
+}
+
+public enum LiveUsageCache {
+    /// The cache after a read: a good read replaces the value; a failed read keeps the last good
+    /// value and notes the error. Accounts the read did not ask (no login any more) are dropped.
+    public static func merge(_ old: [String: CachedUsage], _ new: [String: LiveAccountUsage], now: Double) -> [String: CachedUsage] {
+        var out: [String: CachedUsage] = [:]
+        for (id, u) in new {
+            if u.ok {
+                out[id] = CachedUsage(limits: u.limits, readAt: now, error: nil)
+            } else {
+                out[id] = CachedUsage(limits: old[id]?.limits ?? [], readAt: old[id]?.readAt ?? 0, error: u.error ?? "network")
+            }
+        }
+        return out
+    }
+}
+
+/// When live usage is read again: every 10 minutes, and when the panel opens if the last read
+/// is 2 minutes old or more. Never more often than every 2 minutes.
+public enum LiveSchedule {
+    public static let minimum: Double = 120
+    public static let interval: Double = 600
+
+    public static func due(lastAttempt: Double?, now: Double, panelOpened: Bool) -> Bool {
+        guard let last = lastAttempt else { return true }
+        return now - last >= (panelOpened ? minimum : interval)
+    }
+}
+
 /// One bar of the claude.ai Usage page.
-public struct LiveLimit: Equatable, Sendable, Decodable {
+public struct LiveLimit: Equatable, Sendable, Codable {
     /// session, weekly_all, weekly_scoped, or a kind this app does not know yet.
     public let kind: String
     public let percent: Double

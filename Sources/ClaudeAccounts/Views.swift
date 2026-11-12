@@ -60,9 +60,8 @@ struct AccountRow: View {
                     if let line = account.detailsLine {
                         Text(line).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                     }
-                    if let state = store.status?.liveState(for: account.id, usage: store.liveUsage) {
-                        LiveUsageView(state: state).padding(.vertical, 1)
-                    }
+                    let live = store.status?.liveState(for: account.id, cache: store.liveCache)
+                    if let live { LiveUsageView(state: live).padding(.vertical, 1) }
                     Text(account.lastUsedLine)
                         .font(.system(size: 10.5)).foregroundStyle(.tertiary).lineLimit(1)
                         .help("\(account.sessions) sessions")
@@ -70,8 +69,9 @@ struct AccountRow: View {
                         Text(account.loginText).font(.system(size: 10.5)).foregroundStyle(.orange).lineLimit(1)
                     }
                     // Re-check every 30 s, so the line goes away when the reset time passes.
+                    // Live bars show their own reset time, so this line shows only without them.
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                        if let line = store.status?.resetLine(for: account.id, now: ctx.date) {
+                        if !live.hasBars, let line = store.status?.resetLine(for: account.id, now: ctx.date) {
                             Label(line, systemImage: "clock").font(.system(size: 10.5)).foregroundStyle(.orange).lineLimit(1)
                         }
                     }
@@ -143,18 +143,38 @@ struct LiveUsageToggle: View {
     }
 }
 
-/// Live usage under an account: one bar each for the 5-hour and the weekly limit, or why it is unavailable.
+extension Optional where Wrapped == LiveRowState {
+    var hasBars: Bool { if case .bars = self { true } else { false } }
+}
+
+/// Live usage under an account: a bar for each limit, or why it is unavailable. When the newest
+/// read failed, the last value shows with a "Last read …" line (the reason in its help text).
 struct LiveUsageView: View {
     let state: LiveRowState
 
     var body: some View {
         switch state {
-        case .bars(let bars):
+        case .bars(let bars, let lastRead, let reason):
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(bars, id: \.label) { UsageBarView(bar: $0) }
+                // Reset times only for high and critical bars, where they matter; on one line, so
+                // every bar keeps its full width and the percents line up down the panel.
+                let resets = bars.filter(\.showsReset).map { "\($0.label) \($0.resetText ?? "")" }
+                if !resets.isEmpty {
+                    Label("Resets " + resets.joined(separator: " · "), systemImage: "clock")
+                        .font(.system(size: 10.5)).foregroundStyle(.orange).lineLimit(1).truncationMode(.tail)
+                }
+                if let lastRead {
+                    Label(lastRead, systemImage: "exclamationmark.circle")
+                        .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        .help(reason ?? "")
+                }
             }
-            .help(bars.map { "\($0.label == "5h" ? "5-hour limit" : "Weekly limit"): \($0.text) used" }.joined(separator: "\n")
-                  + "\nLive from claude.ai")
+            .opacity(lastRead == nil ? 1 : 0.6)
+            .help(bars.map { b in
+                "\(b.label == "5h" ? "5-hour limit" : b.label == "Week" ? "Weekly limit" : b.label): \(b.text) used"
+                    + (b.resetText.map { ", resets \($0)" } ?? "")
+            }.joined(separator: "\n") + "\nLive from claude.ai")
         case .unavailable(let reason):
             Label("Usage unavailable", systemImage: "exclamationmark.circle")
                 .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
@@ -177,7 +197,8 @@ struct UsageBarView: View {
     var body: some View {
         HStack(spacing: 5) {
             Text(bar.label).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
-                .frame(width: 32, alignment: .leading)
+                .lineLimit(1).truncationMode(.tail)
+                .frame(width: 38, alignment: .leading)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.12))
@@ -326,7 +347,7 @@ struct MenuView: View {
             footer
         }
         .frame(width: 380)
-        .task { await store.refresh(); await store.refreshLiveUsage() }
+        .task { await store.refresh(); await store.refreshLiveUsage(panelOpened: true) }
         .background(WindowReader { store.panelWindow = $0 })
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             Task { await store.refresh() }

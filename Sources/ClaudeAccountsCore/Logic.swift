@@ -173,15 +173,26 @@ public extension Status {
         return "\(name) resets " + Self.resetTime(Date(timeIntervalSince1970: next), now: now, timeZone: timeZone)
     }
 
-    /// Live usage under an account: the 5-hour and weekly bars, or why they are unavailable.
-    /// Nil when the setting is off or the account was not asked (no login).
-    func liveState(for accountID: String, usage: [String: LiveAccountUsage]) -> LiveRowState? {
-        guard settings.liveUsageOn, let u = usage[accountID] else { return nil }
-        guard u.ok else { return .unavailable(LiveAccountUsage.reason(u.error ?? "")) }
-        let bars = [("5h", "session"), ("Week", "weekly_all")].compactMap { label, kind in
-            u.limit(kind).map { UsageBar(label: label, percent: $0.percent) }
+    /// Live usage under an account: a bar for each limit (5h, Week, then scoped and new kinds), or
+    /// why it is unavailable. Nil when the setting is off or the account was not asked (no login).
+    func liveState(for accountID: String, cache: [String: CachedUsage], now: Date = Date(),
+                   timeZone: TimeZone = .current) -> LiveRowState? {
+        guard settings.liveUsageOn, let c = cache[accountID] else { return nil }
+        if c.limits.isEmpty {
+            return .unavailable(c.error.map(LiveAccountUsage.reason) ?? "claude.ai sent no usage for this account.")
         }
-        return bars.isEmpty ? .unavailable("claude.ai sent no usage for this account.") : .bars(bars)
+        let first = ["session", "weekly_all"]
+        let ordered = first.compactMap { k in c.limits.first { $0.kind == k } } + c.limits.filter { !first.contains($0.kind) }
+        let bars = ordered.map { l in
+            UsageBar(label: UsageBar.label(kind: l.kind, model: l.label), percent: l.percent,
+                     resetText: l.resetsAt.flatMap { $0 > now.timeIntervalSince1970
+                         ? Self.resetTime(Date(timeIntervalSince1970: $0), now: now, timeZone: timeZone) : nil })
+        }
+        guard let error = c.error else { return .bars(bars, lastRead: nil, reason: nil) }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        let age = f.localizedString(for: Date(timeIntervalSince1970: min(c.readAt, now.timeIntervalSince1970 - 1)), relativeTo: now)
+        return .bars(bars, lastRead: "Last read " + age, reason: LiveAccountUsage.reason(error))
     }
 
     /// Second line of a paused session row: the reset time while it is in the future, then the account.
