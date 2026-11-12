@@ -111,7 +111,35 @@ func main() async {
           s.resetLine(for: B, now: resetAt.addingTimeInterval(-86400), timeZone: ist) == "Limit resets Sun 4:50 PM")
     check("no reset line after the reset", s.resetLine(for: B, now: resetAt.addingTimeInterval(1), timeZone: ist) == nil)
     check("no reset line for an account without a limit",
-          s.resetLine(for: A, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == nil)
+          s.resetLine(for: "cccc3333-0000-0000-0000-000000000000", now: resetAt.addingTimeInterval(-3600), timeZone: ist) == nil)
+
+    print("Last limit hit")
+    let weeklyAt = Date(timeIntervalSince1970: 1794236400)  // Mon 2026-11-09 8:30 PM in Asia/Calcutta
+    check("decodes the limit", s.currentAccount?.limit?.window == "week" && s.currentAccount?.limit?.resetsAt == 1794236400)
+    check("missing limit decodes as nil", s.account(B)?.limit == nil)
+    check("weekly reset line names the window",
+          s.resetLine(for: A, now: resetAt, timeZone: ist) == "Weekly limit resets Mon 8:30 PM")
+    check("no weekly line after the reset", s.resetLine(for: A, now: weeklyAt.addingTimeInterval(1), timeZone: ist) == nil)
+    func variant(_ edit: (inout [[String: Any]]) -> Void) -> Status {
+        var root = try! JSONSerialization.jsonObject(with: Data(contentsOf: fixtures.appendingPathComponent("status.json"))) as! [String: Any]
+        var accounts = root["accounts"] as! [[String: Any]]
+        edit(&accounts)
+        root["accounts"] = accounts
+        return try! JSONDecoder().decode(Status.self, from: JSONSerialization.data(withJSONObject: root))
+    }
+    let fiveHour = variant { $0[0]["limit"] = ["window": "5h", "hitAt": 1794100000.0, "resets": "x", "resetsAt": 1794136800] }
+    check("5-hour reset line", fiveHour.resetLine(for: A, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == "5-hour limit resets 4:50 PM")
+    let noWindow = variant { $0[0]["limit"] = ["window": NSNull(), "hitAt": 1794100000.0, "resets": "x", "resetsAt": 1794136800] }
+    check("unknown window: plain reset line", noWindow.resetLine(for: A, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == "Limit resets 4:50 PM")
+    let both = variant { $0[1]["limit"] = ["window": "week", "hitAt": 1794100000.0, "resets": "x", "resetsAt": 1794236400] }
+    check("the later reset wins over a paused session", both.resetLine(for: B, now: resetAt.addingTimeInterval(-3600), timeZone: ist)
+          == "Weekly limit resets Mon 8:30 PM")
+    check("no line after both resets pass", both.resetLine(for: B, now: weeklyAt.addingTimeInterval(1), timeZone: ist) == nil)
+    let now = Date(timeIntervalSince1970: 1794100000 + 2 * 86400)
+    check("last limit text", s.currentAccount!.lastLimitText(now: now) == "Weekly · 2 days ago")
+    check("last limit text for 5-hour", fiveHour.currentAccount!.lastLimitText(now: now) == "5-hour · 2 days ago")
+    check("last limit text without a window", noWindow.currentAccount!.lastLimitText(now: now) == "Limit · 2 days ago")
+    check("no limit shows a dash", s.account(B)!.lastLimitText(now: now) == "—")
     let unknown = try! JSONDecoder().decode(Status.self, from: Data(
         String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
             .replacingOccurrences(of: "\"resetsAt\": 1794136800", with: "\"resetsAt\": null").utf8))

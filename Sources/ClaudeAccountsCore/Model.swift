@@ -16,6 +16,8 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public let switchedAt: Double?
     /// From the Claude Code sign-in data; nil from an older engine.
     public let details: AccountDetails?
+    /// Newest usage-limit error of this account in the last 8 days; nil when none.
+    public let limit: LimitHit?
 
     public var title: String { name.isEmpty ? "Account \(id.prefix(8))" : name }
 
@@ -26,6 +28,13 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public var displayNameText: String { details?.displayName ?? Self.none }
     public var emailText: String { details?.email ?? Self.none }
     public var switchedText: String { (switchedAt ?? 0) > 0 ? Self.relative(switchedAt!) : Self.none }
+
+    /// "Weekly · 2 days ago" for the Settings table, or a dash.
+    public func lastLimitText(now: Date = Date()) -> String {
+        guard let l = limit else { return Self.none }
+        return l.windowName + " · " + RelativeDateTimeFormatter().localizedString(
+            for: Date(timeIntervalSince1970: l.hitAt), relativeTo: now)
+    }
 
     /// Panel line: email (when the title does not already have it), plan and organization, only the
     /// fields that are known. Nil when none is known.
@@ -78,6 +87,21 @@ public struct AccountDetails: Decodable, Equatable, Sendable {
     public let displayName: String?
     public let plan: String?
     public let orgName: String?
+}
+
+/// The newest usage-limit error of an account, from its session transcripts.
+public struct LimitHit: Decodable, Equatable, Sendable {
+    /// "5h", "week", or nil when the error text names no known window.
+    public let window: String?
+    public let hitAt: Double
+    public let resets: String
+    /// When the limit resets (epoch seconds), or nil when the reset text could not be read.
+    public let resetsAt: Double?
+
+    /// "5-hour", "Weekly" or "Limit".
+    public var windowName: String {
+        switch window { case "5h": "5-hour"; case "week": "Weekly"; default: "Limit" }
+    }
 }
 
 /// A session whose last turn ended on a usage-limit error.

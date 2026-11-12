@@ -36,7 +36,7 @@ Commands (all print JSON unless noted):
 
 <account> is a full account UUID or its first 8 characters.
 """
-import contextlib, datetime, fcntl, glob, json, os, platform, plistlib, re, shutil, sqlite3, subprocess, sys, time
+import contextlib, datetime, fcntl, functools, glob, hashlib, json, os, platform, plistlib, re, shutil, sqlite3, subprocess, sys, time
 
 HOME = os.path.expanduser("~")
 APP = os.environ.get("CLAUDE_APP_DIR", f"{HOME}/Library/Application Support/Claude")
@@ -544,15 +544,34 @@ def reset_timestamp(text, stopped_at):
     return None
 
 
+def recent_sessions(days):
+    """{session file name: (mtime, data, path)} of the newest copy of each session file changed
+    in the last `days`. Sync copies a session into several account folders under the same file
+    name, so only the newest copy is read. The data is read once per run (see session_data)."""
+    cutoff = time.time() - days * 86400
+    newest = {}
+    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
+        m = os.path.getmtime(f)
+        name = os.path.basename(f)
+        if m >= cutoff and (name not in newest or newest[name][0] < m):
+            newest[name] = (m, f)
+    out = {}
+    for name, (m, f) in newest.items():
+        d = session_data(f)
+        if isinstance(d, dict):
+            out[name] = (m, d, f)
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def session_data(path):
+    return read_json(path, {}) or {}
+
+
 def paused_sessions(days=3):
     """Sessions whose last turn ended on a usage-limit error."""
     newest = {}
-    cutoff = time.time() - days * 86400
-    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
-        m = os.path.getmtime(f)
-        if m < cutoff:
-            continue
-        d = read_json(f, {}) or {}
+    for m, d, f in recent_sessions(days).values():
         sid = d.get("sessionId")
         if sid and (sid not in newest or newest[sid][0] < m):
             newest[sid] = (m, d, f)
@@ -579,6 +598,141 @@ def paused_sessions(days=3):
                     "cwd": d.get("cwd", ""), "message": text.strip()[:160], "resets": resets,
                     "resetsAt": reset_timestamp(resets, stopped), "stoppedAt": stopped})
     out.sort(key=lambda x: x["stoppedAt"], reverse=True)
+    return out
+
+
+ACTIVE_RE = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) (?:switched to (\S+)|auto-saved login of (\S+)|saved login of (\S+) \(auto\))$")
+
+
+def active_timeline():
+    """[(epoch, account)] from the switch log: from that time, Claude used that account.
+    A switch and an auto save both show the active account. A save on switch does not:
+    it saves the account that Claude leaves."""
+    out = []
+    for line in log_tail(n=None):
+        m = ACTIVE_RE.match(line)
+        if m:
+            with contextlib.suppress(ValueError, OverflowError):
+                t = time.mktime(time.strptime(m[1], "%Y-%m-%d %H:%M:%S"))
+                out.append((t, m[2] or m[3] or m[4]))
+    out.sort()
+    return out
+
+
+def limit_window(text):
+    t = text.lower()
+    if "weekly limit" in t:
+        return "week"
+    if "5-hour limit" in t or "session limit" in t:
+        return "5h"
+    return None
+
+
+LIMIT_SCAN = os.path.join(BASE, "limit-scan.json")
+ERROR_MARK = b'"isApiErrorMessage":true'
+
+
+def limit_error(line):
+    """(epoch, text) of a transcript line that is a usage-limit error, else None."""
+    try:
+        e = json.loads(line)
+        hit = datetime.datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    if not isinstance(e, dict) or not e.get("isApiErrorMessage"):
+        return None
+    content = (e.get("message") or {}).get("content")
+    text = " ".join(c.get("text", "") for c in content if isinstance(c, dict)) if isinstance(content, list) else str(content)
+    return (hit, text, e["timestamp"]) if "limit" in text.lower() else None
+
+
+def scan_transcript(path, entry, cutoff):
+    """Usage-limit errors in a transcript after `cutoff`, read from where the last scan stopped.
+    Transcripts only grow, so `entry` ({size, head, hits: [[epoch, text, iso time]]}) keeps the
+    bytes already read. One session can hit limits on several accounts, so all hits are kept.
+    A transcript that got shorter, or whose first 4 KB changed, was rewritten: it is read again
+    from the start. Only a hash of the first 4 KB is kept, not the text."""
+    size = os.path.getsize(path)
+    with open(path, "rb") as f:
+        head = hashlib.sha1(f.read(4096)).hexdigest()
+    if (not isinstance(entry, dict) or not isinstance(entry.get("size"), int) or entry["size"] > size
+            or entry.get("head") != head and entry["size"] > 0):
+        entry = {"size": 0}
+    hits = [h for h in entry.get("hits") or [] if isinstance(h, list) and len(h) == 3  # a bad cache is dropped
+            and isinstance(h[0], (int, float)) and isinstance(h[1], str) and isinstance(h[2], str) and h[0] >= cutoff]
+    entry = dict(entry, head=head, hits=hits)
+    if entry["size"] == size:
+        return entry
+    with open(path, "rb") as f:
+        f.seek(entry["size"])
+        pos, rest = entry["size"], b""
+        while chunk := f.read(1 << 24):
+            rest += chunk
+            end = rest.rfind(b"\n") + 1  # only whole lines; a half-written line waits
+            for line in rest[:end].split(b"\n"):
+                if ERROR_MARK in line:
+                    found = limit_error(line)
+                    if found and found[0] >= cutoff:
+                        hits.append(list(found))
+            pos, rest = pos + end, rest[end:]
+    entry["size"] = pos
+    return entry
+
+
+def limit_hits(days=8):
+    """{account: newest usage-limit error in the last `days`}: {window, hitAt, resets, resetsAt}.
+    A session can be in several account folders (sync copies it), so the error belongs to the
+    account the switch log shows as active at the error time. Without a log entry before that
+    time, it belongs to the newest copy, as in paused_sessions."""
+    cutoff = time.time() - days * 86400
+    cache = read_json(LIMIT_SCAN, {})
+    cache = cache if isinstance(cache, dict) and cache.get("v") == 3 else {}
+    old_sessions = cache.get("sessions") if isinstance(cache.get("sessions"), dict) else {}
+    old_scans = cache.get("transcripts") if isinstance(cache.get("transcripts"), dict) else {}
+    files = {}  # session file name -> (mtime, path) of the newest copy
+    for f in glob.glob(os.path.join(SESS, "*", "*", "local_*.json")):
+        m = os.path.getmtime(f)
+        name = os.path.basename(f)
+        if m >= cutoff and (name not in files or files[name][0] < m):
+            files[name] = (m, f)
+    sessions, newest = {}, {}  # newest: cli session -> (mtime, account of the newest copy)
+    for name, (m, f) in files.items():
+        known_cli = old_sessions.get(name)
+        if isinstance(known_cli, list) and len(known_cli) == 2 and known_cli[0] == m:
+            cli = known_cli[1]  # the file did not change: no need to parse it again
+        else:
+            cli = session_data(f).get("cliSessionId")
+            cli = cli if isinstance(cli, str) and cli else None
+        sessions[name] = [m, cli]
+        if cli and (cli not in newest or newest[cli][0] < m):
+            newest[cli] = (m, f.split(os.sep)[-3])
+    scans = {}
+    for cli in newest:
+        entry = old_scans.get(cli) if isinstance(old_scans.get(cli), dict) else {}
+        path = entry.get("path")
+        if not (isinstance(path, str) and os.path.isfile(path)):
+            paths = glob.glob(f"{HOME}/.claude/projects/*/{glob.escape(cli)}.jsonl")
+            path, entry = (paths[0], {}) if paths else (None, {})
+        if path:
+            with contextlib.suppress(OSError):
+                scans[cli] = dict(scan_transcript(path, entry, cutoff), path=path)
+    new_cache = {"v": 3, "sessions": sessions, "transcripts": scans}
+    if new_cache != cache:
+        with contextlib.suppress(OSError):
+            write_json(LIMIT_SCAN, new_cache)
+    timeline = active_timeline()
+    known = set(known_accounts())
+    out = {}
+    for cli, entry in scans.items():
+        for hit, text, at in entry["hits"]:
+            active = [a for t, a in timeline if t <= hit]
+            account = active[-1] if active and active[-1] in known else newest[cli][1]
+            if account in out and out[account]["hitAt"] >= hit:
+                continue
+            reset = re.search(r"resets? ([^·\n]+)", text)
+            resets = reset.group(1).strip() if reset else ""
+            out[account] = {"window": limit_window(text), "hitAt": hit, "resets": resets,
+                            "resetsAt": reset_timestamp(resets, at)}
     return out
 
 
@@ -729,6 +883,7 @@ def status():
     for acc, email in cli_emails().items():
         labels.setdefault(acc, email)
     switched = switch_times()
+    limits = limit_hits()
     dirs = account_dirs()
     accounts = []
     for a in known_accounts():
@@ -741,6 +896,7 @@ def status():
             "savedMode": (meta or {}).get("mode", ""),
             "current": a == cur, "hidden": a in s["hidden"], "owned": a in s["owned"],
             "switchedAt": switched.get(a, 0), "details": account_details(cli.get(a, {})),
+            "limit": limits.get(a),
         })
     accounts.sort(key=lambda x: (not x["current"], -x["sessions"], -x["lastUsed"], x["id"]))
     v = claude_version()
@@ -793,7 +949,7 @@ def log_tail(n=200):
     for path in (LOG + ".1", LOG):  # the rotated log first, so the lines stay in order
         with contextlib.suppress(OSError), open(path, errors="replace") as f:
             lines += f.read().splitlines()
-    return lines[-n:]
+    return lines if n is None else lines[-n:]
 
 
 def report(app_settings=None):

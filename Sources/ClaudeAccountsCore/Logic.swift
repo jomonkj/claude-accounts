@@ -162,12 +162,15 @@ public extension Status {
         return ("Usage limit reached", "\"\(p.title)\" stopped on \(who).\(reset)")
     }
 
-    /// Grey line under an account that hit its limit, for example "Limit resets 4:50 PM".
-    /// Nil when the account has no known reset time that is still in the future.
+    /// Grey line under an account that hit its limit, for example "Weekly limit resets Mon 8:30 PM".
+    /// It uses the latest future reset of the account's last limit hit and its paused sessions;
+    /// the window is named when the last limit hit gives that time. Nil when no reset is in the future.
     func resetLine(for accountID: String, now: Date = Date(), timeZone: TimeZone = .current) -> String? {
-        let next = paused.filter { $0.account == accountID }
-            .compactMap(\.resetsAt).filter { $0 > now.timeIntervalSince1970 }.max()
-        return next.map { "Limit resets " + Self.resetTime(Date(timeIntervalSince1970: $0), now: now, timeZone: timeZone) }
+        let limit = account(accountID)?.limit
+        let resets = paused.filter { $0.account == accountID }.compactMap(\.resetsAt) + [limit?.resetsAt].compactMap { $0 }
+        guard let next = resets.filter({ $0 > now.timeIntervalSince1970 }).max() else { return nil }
+        let name = limit?.resetsAt == next && limit?.window != nil ? "\(limit!.windowName) limit" : "Limit"
+        return "\(name) resets " + Self.resetTime(Date(timeIntervalSince1970: next), now: now, timeZone: timeZone)
     }
 
     /// Second line of a paused session row: the reset time while it is in the future, then the account.

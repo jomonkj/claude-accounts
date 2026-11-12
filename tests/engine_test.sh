@@ -162,6 +162,68 @@ check "unreadable text is null" '[ "$(resets_at "resets soon" 2026-11-07T12:00:0
 check "unknown time zone is null" '[ "$(resets_at "resets 8pm (Mars/Base)" 2026-11-07T12:00:00Z)" = None ]'
 check "no reset text is null" '[ "$(resets_at "try again later" 2026-11-07T12:00:00Z)" = None ]'
 
+echo "last limit hit for each account"
+mv "$HOME/.claude/projects/p/cli-p1.jsonl" "$T/cli-p1.keep"
+Q="$HOME/.claude/projects/q"; mkdir -p "$Q"
+iso() { /usr/bin/python3 -c "import datetime;print((datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=$1)).strftime('%Y-%m-%dT%H:%M:%SZ'))"; }
+logtime() { /usr/bin/python3 -c "import datetime;print((datetime.datetime.now()-datetime.timedelta(hours=$1)).strftime('%Y-%m-%d %H:%M:%S'))"; }
+err() { # <hours ago> <text> -> one transcript line with a usage-limit error
+  echo '{"type":"assistant","isApiErrorMessage":true,"timestamp":"'"$(iso $1)"'","message":{"content":[{"type":"text","text":"'"$2"'"}]}}'
+}
+sess() { # <account> <session> <cli id>: a desktop session file
+  mkdir -p "$A/claude-code-sessions/$1/org"; echo '{"sessionId":"'"$2"'","cliSessionId":"'"$3"'","title":"t"}' > "$A/claude-code-sessions/$1/org/$2.json"
+}
+lim() { acct "$1" "a[\"limit\"] and (a[\"limit\"][\"window\"], a[\"limit\"][\"resetsAt\"] is not None)"; }
+check "no limit error is null" '[ "$(acct AAAA "a[\"limit\"]")" = None ] && [ "$(acct BBBB "a[\"limit\"]")" = None ]'
+sess BBBBBBBB-2 local_l1 cli-l1
+{ err 30 "You've hit your 5-hour limit · resets 8pm (UTC)"; echo 'not json'; echo '{"type":"user","timestamp":"'"$(iso 29)"'"}'; } > "$Q/cli-l1.jsonl"
+check "5-hour limit, with a bad line in the transcript" '[ "$(lim BBBB)" = "('"'"'5h'"'"', True)" ]'
+check "hitAt is the error time" '[ "$(acct BBBB "abs(a[\"limit\"][\"hitAt\"] - __import__(\"time\").time() + 30*3600) < 5")" = True ]'
+check "reset text kept" '[ "$(acct BBBB "a[\"limit\"][\"resets\"]")" = "8pm (UTC)" ]'
+err 20 "You've hit your session limit · resets 9pm (UTC)" >> "$Q/cli-l1.jsonl"
+check "session limit counts as 5-hour, newest wins" '[ "$(lim BBBB)" = "('"'"'5h'"'"', True)" ] && [ "$(acct BBBB "a[\"limit\"][\"resets\"]")" = "9pm (UTC)" ]'
+sess BBBBBBBB-2 local_l2 cli-l2
+err 10 "You've hit your weekly limit · resets Nov 30, 8:30pm (UTC)" > "$Q/cli-l2.jsonl"
+check "weekly limit, newest across sessions" '[ "$(lim BBBB)" = "('"'"'week'"'"', True)" ]'
+err 1 "You've hit some new limit" >> "$Q/cli-l2.jsonl"
+check "unknown window and no reset are null" '[ "$(acct BBBB "(a[\"limit\"][\"window\"], a[\"limit\"][\"resetsAt\"])")" = "(None, None)" ]'
+sess AAAAAAAA-1 local_l3 cli-l3
+err 200 "You've hit your 5-hour limit · resets 8pm (UTC)" > "$Q/cli-l3.jsonl"
+check "error older than 8 days ignored" '[ "$(acct AAAA "a[\"limit\"]")" = None ]'
+{ err 3 "You've hit your 5-hour limit · resets 8pm (UTC)"; /usr/bin/python3 -c "print(('{\"type\":\"user\",\"x\":\"' + 'y'*900 + '\"}\n')*200, end='')"; } > "$Q/cli-l3.jsonl"
+check "error far before the end of a long transcript" '[ "$(lim AAAA)" = "('"'"'5h'"'"', True)" ]'
+err 2 "You've hit your weekly limit · resets Nov 30, 8:30pm (UTC)" > "$Q/cli-l3.jsonl"
+check "a rewritten (shorter) transcript is scanned again" '[ "$(lim AAAA)" = "('"'"'week'"'"', True)" ]'
+rm "$Q/cli-l3.jsonl"; E status >/dev/null
+check "a removed transcript drops its error" '[ "$(acct AAAA "a[\"limit\"]")" = None ]'
+echo "sync copied a session to both accounts; the log says A was active"
+sess AAAAAAAA-1 local_l4 cli-l4; sess BBBBBBBB-2 local_l4 cli-l4
+touch "$A/claude-code-sessions/BBBBBBBB-2/org/local_l4.json"
+err 0.5 "You've hit your weekly limit · resets Nov 30, 8:30pm (UTC)" > "$Q/cli-l4.jsonl"
+check "without a log entry the newest copy owns it" '[ "$(lim BBBB)" = "('"'"'week'"'"', True)" ] && [ "$(acct AAAA "a[\"limit\"]")" = None ]'
+cp "$CLAUDE_SWITCH_HOME/switch.log" "$T/log.keep"
+echo "$(logtime 0.75) switched to AAAAAAAA-1" >> "$CLAUDE_SWITCH_HOME/switch.log"
+check "the account active at the error time owns it" '[ "$(lim AAAA)" = "('"'"'week'"'"', True)" ]'
+check "...and the other copy does not" '[ "$(acct BBBB "a[\"limit\"][\"hitAt\"] < __import__(\"time\").time() - 3000")" = True ]'
+echo "$(logtime 0.6) saved login of BBBBBBBB-2 (auto)" >> "$CLAUDE_SWITCH_HOME/switch.log"
+check "an auto save marks the active account too" '[ "$(acct BBBB "a[\"limit\"][\"hitAt\"] > __import__(\"time\").time() - 3000")" = True ]'
+echo "$(logtime 0.55) saved login of AAAAAAAA-1 (switch)" >> "$CLAUDE_SWITCH_HOME/switch.log"
+check "a save on switch does not mark the account active" '[ "$(acct BBBB "a[\"limit\"][\"hitAt\"] > __import__(\"time\").time() - 3000")" = True ]'
+echo "one session hits a limit on A, then (after a switch) on B"
+rm -f "$Q"/cli-l[124].jsonl; E status >/dev/null
+{ err 0.7 "You've hit your 5-hour limit · resets 8pm (UTC)"; err 0.4 "You've hit your weekly limit · resets Nov 30, 8:30pm (UTC)"; } > "$Q/cli-l4.jsonl"
+echo "$(logtime 0.5) switched to BBBBBBBB-2" >> "$CLAUDE_SWITCH_HOME/switch.log"
+check "the older error stays with A" '[ "$(lim AAAA)" = "('"'"'5h'"'"', True)" ]'
+check "the newer error goes to B" '[ "$(lim BBBB)" = "('"'"'week'"'"', True)" ]'
+S="$CLAUDE_SWITCH_HOME/limit-scan.json"
+echo '{"v":3,"sessions":{"local_l4.json":"x"},"transcripts":{"cli-l4":{"size":"x","hits":[["a",1,2],5]}}}' > "$S"
+check "a damaged scan cache is rebuilt" '[ "$(lim AAAA)" = "('"'"'5h'"'"', True)" ] && [ "$(lim BBBB)" = "('"'"'week'"'"', True)" ]'
+echo 'not json' > "$S"
+check "an unreadable scan cache is rebuilt" '[ "$(lim AAAA)" = "('"'"'5h'"'"', True)" ]'
+check "the cache holds no transcript text beyond the limit message" '! grep -q "\"type\"" "$S"'
+cp "$T/log.keep" "$CLAUDE_SWITCH_HOME/switch.log"
+rm -rf "$Q" "$A"/claude-code-sessions/*/org; mv "$T/cli-p1.keep" "$HOME/.claude/projects/p/cli-p1.jsonl"
+
 echo "version and layout guard"
 E label BBBBBBBB-2 "" >/dev/null
 login_as BBBBBBBB-2 cookieB; E add >/dev/null; login_as AAAAAAAA-1 cookieA
