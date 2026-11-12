@@ -31,12 +31,13 @@ JSON
   ;;
   sync) echo "{\"changes\": 23, \"accounts\": {\"$A\": 9, \"$S\": 14}, \"skipped\": [\"$J\", \"$T\"], \"dryRun\": true}" ;;
   backups) echo "{\"backups\": [{\"name\": \"2026-11-09\", \"kind\": \"daily\", \"time\": \"2026-11-09\", \"sessions\": 307, \"modified\": $((now - 3600))}, {\"name\": \"2026-11-08\", \"kind\": \"daily\", \"time\": \"2026-11-08\", \"sessions\": 301, \"modified\": $((now - 90000))}, {\"name\": \"2026-11-07\", \"kind\": \"daily\", \"time\": \"2026-11-07\", \"sessions\": 296, \"modified\": $((now - 176400))}]}" ;;
-  # Live usage for the renders: the app asks this only in render mode, never the Keychain.
+  # Live usage for the renders (cache entries): the app asks this only in render mode, never the Keychain.
+  # sam: high and critical, with reset times; alex: normal, with Fable; jordan: newest read failed, old value shown.
   usage-demo) cat <<JSON
 {"accounts": {
- "$A": {"ok": true, "error": null, "limits": [{"kind": "session", "percent": 12, "resetsAt": null, "label": null}, {"kind": "weekly_all", "percent": 17, "resetsAt": null, "label": null}]},
- "$S": {"ok": true, "error": null, "limits": [{"kind": "session", "percent": 93, "resetsAt": null, "label": null}, {"kind": "weekly_all", "percent": 76, "resetsAt": null, "label": null}]},
- "$J": {"ok": false, "error": "http-403", "limits": []}
+ "$A": {"readAt": $now, "error": null, "limits": [{"kind": "session", "percent": 12, "resetsAt": $((now + 9000)), "label": null}, {"kind": "weekly_all", "percent": 17, "resetsAt": $((now + 4*86400)), "label": null}, {"kind": "weekly_scoped", "percent": 9, "resetsAt": $((now + 4*86400)), "label": "Fable"}]},
+ "$S": {"readAt": $now, "error": null, "limits": [{"kind": "session", "percent": 93, "resetsAt": $((now + 5400)), "label": null}, {"kind": "weekly_all", "percent": 76, "resetsAt": $((now + 2*86400)), "label": null}]},
+ "$J": {"readAt": $((now - 1500)), "error": "http-403", "limits": [{"kind": "session", "percent": 0, "resetsAt": null, "label": null}, {"kind": "weekly_all", "percent": 41, "resetsAt": $((now + 5*86400)), "label": null}]}
 }}
 JSON
   ;;

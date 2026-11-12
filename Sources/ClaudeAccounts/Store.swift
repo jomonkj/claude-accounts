@@ -13,8 +13,11 @@ final class Store: ObservableObject {
     @Published var showHidden = false
     @Published var backups: [BackupInfo] = []
     @Published var update: UpdateInfo?
-    /// Live usage of each account (docs/usage-live.md); empty while the setting is off.
-    @Published var liveUsage: [String: LiveAccountUsage] = [:]
+    /// The last good live usage of each account (docs/usage-live.md); empty while the setting is
+    /// off. Saved in the app's preferences, so it shows at once after a launch. No cookie in it.
+    @Published var liveCache: [String: CachedUsage] = Store.loadLiveCache()
+    private var lastLiveAttempt: Double?
+    private static let liveCacheKey = "liveUsageCache"
     /// Why live usage could not be read (for example, no Keychain access), shown in Settings.
     @Published var liveUsageProblem: String?
     /// The Claude Safe Storage password, kept in memory only for this launch. Never written anywhere.
@@ -76,22 +79,28 @@ final class Store: ObservableObject {
         }
     }
 
-    /// Read live usage from claude.ai, only while the setting is on. The password goes to the
-    /// engine on stdin. A debug render never reads the Keychain.
-    func refreshLiveUsage() async {
-        if RenderMode.isOn() {  // demo renders: the demo engine's usage, never the Keychain
-            struct Demo: Decodable { let accounts: [String: LiveAccountUsage] }
+    /// Read live usage from claude.ai, only while the setting is on and when the schedule says so
+    /// (LiveSchedule): every 10 minutes, and when the panel opens if the last read is 2 minutes old.
+    /// `force` reads now (the setting was just turned on). The password goes to the engine on stdin.
+    /// A debug render never reads the Keychain.
+    func refreshLiveUsage(panelOpened: Bool = false, force: Bool = false) async {
+        let now = Date().timeIntervalSince1970
+        if RenderMode.isOn() {  // demo renders: the demo engine's cache entries, never the Keychain
+            struct Demo: Decodable { let accounts: [String: CachedUsage] }
             let r = await engine.run(["usage-demo"])
-            liveUsage = (try? JSONDecoder().decode(Demo.self, from: Data(r.output.utf8)))?.accounts ?? [:]
+            liveCache = (try? JSONDecoder().decode(Demo.self, from: Data(r.output.utf8)))?.accounts ?? [:]
             return
         }
         guard status?.settings.liveUsageOn == true else {
-            liveUsage = [:]; liveUsageProblem = nil; safeStorage = nil
+            if !liveCache.isEmpty { liveCache = [:]; saveLiveCache() }
+            liveUsageProblem = nil; safeStorage = nil; lastLiveAttempt = nil
             return
         }
-        guard !liveUsageRunning else { return }
+        guard !liveUsageRunning, force || LiveSchedule.due(lastAttempt: lastLiveAttempt, now: now, panelOpened: panelOpened)
+        else { return }
         liveUsageRunning = true
         defer { liveUsageRunning = false }
+        lastLiveAttempt = now
         if safeStorage == nil {
             switch await Task.detached(operation: { Keychain.claudeSafeStorage() }).value {
             case .success(let pw): safeStorage = pw
@@ -107,7 +116,18 @@ final class Store: ObservableObject {
         }
         let result = await LiveUsageClient.fetch(cookies.accounts)
         liveUsageProblem = nil
-        if result != liveUsage { liveUsage = result }
+        let merged = LiveUsageCache.merge(liveCache, result, now: Date().timeIntervalSince1970)
+        if merged != liveCache { liveCache = merged; saveLiveCache() }
+    }
+
+    private static func loadLiveCache() -> [String: CachedUsage] {
+        guard let data = UserDefaults.standard.data(forKey: liveCacheKey) else { return [:] }
+        return (try? JSONDecoder().decode([String: CachedUsage].self, from: data)) ?? [:]
+    }
+
+    private func saveLiveCache() {
+        if liveCache.isEmpty { UserDefaults.standard.removeObject(forKey: Self.liveCacheKey); return }
+        UserDefaults.standard.set(try? JSONEncoder().encode(liveCache), forKey: Self.liveCacheKey)
     }
 
     /// Finish or roll back a switch that stopped in the middle (for example, the Mac lost power).
@@ -125,6 +145,7 @@ final class Store: ObservableObject {
     func tick() async {
         _ = await run(["tick"])
         await refresh()
+        await refreshLiveUsage()
         if Date().timeIntervalSince(lastUpdateCheck) > 24 * 3600 { await checkForUpdate() }
     }
 
@@ -363,7 +384,7 @@ final class Store: ObservableObject {
     func set(_ key: String, _ value: Bool) {
         Task {
             await perform("Saving…", ["set", key, value ? "true" : "false"])
-            if key == "liveUsage" { await refreshLiveUsage() }
+            if key == "liveUsage" { await refreshLiveUsage(force: true) }
         }
     }
 
