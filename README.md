@@ -49,11 +49,12 @@ New in 1.1:
 - **Copy debug report** (Settings → About). Emails and account IDs show as "account 1", "account 2".
 - **Uninstall** (Settings → About). Saved logins and backups stay.
 
-New since 1.1.1:
+New in 1.2:
 
 - **Account details.** The panel shows the plan and organization under each account. Settings → Accounts adds Plan and Last switch columns. The data comes from the Claude Code sign-in files (`~/.claude.json`, `~/.claude-*/.claude.json`), so it shows only for accounts signed in to Claude Code.
 - **Last limit hit.** The reset line names the limit: "5-hour limit resets 4:50 PM" or "Weekly limit resets Mon 8:30 PM". Settings → Accounts adds a Last limit column, for example "Weekly · 2 days ago". The data comes from the session transcripts of the last 8 days.
 - **Debug report** lists the plan and the last limit window of each account. Display names and organization names are not in it.
+- **Stopped on usage limit** now names the account that hit the limit, also for a session that sync copied to several accounts.
 
 All of this comes from files on your Mac. The app sends nothing to claude.ai.
 

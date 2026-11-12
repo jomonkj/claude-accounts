@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/docs/screenshots"
 DEMO="$ROOT/build/screenshots/Claude Accounts.app"
 
-ARCHS="${ARCHS:-arm64}" "$ROOT/scripts/build.sh" "${VERSION:-1.1.0}" >/dev/null 2>&1
+ARCHS="${ARCHS:-arm64}" "$ROOT/scripts/build.sh" "${VERSION:-1.2.0}" >/dev/null 2>&1
 rm -rf "$ROOT/build/screenshots"; mkdir -p "$ROOT/build/screenshots" "$OUT"
 cp -R "$ROOT/build/Claude Accounts.app" "$DEMO"
 cp "$ROOT/scripts/demo/claude-switch" "$DEMO/Contents/Resources/claude-switch"
