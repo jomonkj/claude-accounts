@@ -253,6 +253,8 @@ func main() async {
     check("color index is stable", b.colorIndex == s.account(B)!.colorIndex)
     check("login text for auto save", s.currentAccount!.loginText.hasSuffix("(auto)"))
     check("never used text", s.account("cccc3333-0000-0000-0000-000000000000")?.lastUsedText == "never used")
+    check("panel last-used line starts with a capital", s.account("cccc3333-0000-0000-0000-000000000000")?.lastUsedLine == "Never used"
+          && s.account(B)!.lastUsedLine.hasPrefix("Used "))
 
     print("Account details")
     let a = s.currentAccount!, c = s.account("cccc3333-0000-0000-0000-000000000000")!
@@ -305,13 +307,31 @@ func main() async {
     check("fetch: an account without a login sends no request", usage["cccc3333-0000-0000-0000-000000000000"]?.error == "no-login")
     check("fetch: a network error is network", usage[B]?.error == "network" && usage[A]?.ok == true)
     check("live usage setting decoded", s.settings.liveUsageOn)
-    check("panel line: 5-hour and weekly percent", s.liveLine(for: A, usage: usage) == "5h 42% · wk 16%")
-    check("panel line for a failed account", s.liveLine(for: B, usage: usage) == "Live usage: unavailable")
-    check("no line for an account that was not asked", s.liveLine(for: "dddd", usage: usage) == nil)
+    check("panel bars: 5h and Week, in that order", s.liveState(for: A, usage: usage) == .bars([
+        UsageBar(label: "5h", percent: 42.4), UsageBar(label: "Week", percent: 16)]))
+    check("bar text is a whole percent", UsageBar(label: "5h", percent: 42.4).text == "42%")
+    check("bar fill stays in 0...1", UsageBar(label: "x", percent: 130).fraction == 1 && UsageBar(label: "x", percent: -5).fraction == 0)
+    check("levels: normal below 70, high from 70, critical from 90",
+          [69.4, 70, 89.9, 90, 100].map { UsageLevel(percent: $0) } == [.normal, .high, .high, .critical, .critical])
+    check("a failed account is unavailable, with the reason in words",
+          s.liveState(for: B, usage: usage) == .unavailable("No connection to claude.ai."))
+    check("reasons for each error type", ["http-403", "http-401", "no-login", "decrypt", "not-json", "http-500"].map(LiveAccountUsage.reason) == [
+        "claude.ai refused the request (HTTP 403).",
+        "The saved login has expired. Switch to this account to sign in again.",
+        "This account has no saved login.",
+        "The saved login could not be read.",
+        "claude.ai sent an unexpected answer.",
+        "claude.ai answered with an error (HTTP 500)."])
+    check("an answer with no known limit is unavailable",
+          s.liveState(for: A, usage: [A: LiveAccountUsage(ok: true, limits: [LiveLimit(kind: "other", percent: 1, resetsAt: nil, label: nil)], error: nil)])
+          == .unavailable("claude.ai sent no usage for this account."))
+    check("no state for an account that was not asked", s.liveState(for: "dddd", usage: usage) == nil)
     let offStatus = try! JSONDecoder().decode(Status.self, from: Data(
         String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
             .replacingOccurrences(of: "\"liveUsage\": true", with: "\"liveUsage\": false").utf8))
-    check("no line when the setting is off", offStatus.liveLine(for: A, usage: usage) == nil)
+    check("no state when the setting is off", offStatus.liveState(for: A, usage: usage) == nil)
+    let demo = try? JSONDecoder().decode([String: LiveAccountUsage].self, from: Data(#"{"a":{"ok":true,"error":null,"limits":[{"kind":"session","percent":12,"resetsAt":null,"label":null}]}}"#.utf8))
+    check("live usage decodes (demo renders)", demo?["a"]?.limit("session")?.percent == 12)
     let oldSettings = try! JSONDecoder().decode(EngineSettings.self, from: Data(#"{"syncOnSwitch":false,"syncConfirmed":false,"autoSaveLogins":true,"dailyBackup":true,"backupKeep":7,"showNameInMenuBar":true,"hidden":[],"order":[],"pinned":[]}"#.utf8))
     check("older status without the setting means off", oldSettings.liveUsageOn == false)
 

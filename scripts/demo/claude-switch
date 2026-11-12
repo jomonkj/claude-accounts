@@ -11,7 +11,7 @@ case "$1" in
 {"current": "$A", "signedIn": true, "claudeRunning": true,
  "claudeVersion": "1.0.1307", "versionTested": true, "layoutProblems": [], "pendingRecovery": false,
  "settings": {"syncOnSwitch": false, "syncConfirmed": true, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7,
-   "showNameInMenuBar": true, "hidden": [], "order": ["$A", "$J", "$T"], "pinned": ["$S"]},
+   "showNameInMenuBar": true, "hidden": [], "order": ["$A", "$J", "$T"], "pinned": ["$S"], "liveUsage": true},
  "accounts": [
   {"id": "$A", "name": "alex@example.com", "sessions": 142, "lastUsed": $((now - 60)), "savedLogin": true, "savedAt": $((now - 240)), "savedMode": "auto", "current": true, "hidden": false, "owned": true,
    "switchedAt": $((now - 3600)), "details": {"email": "alex@example.com", "displayName": "Alex", "plan": "Max 5x", "orgName": null},
@@ -31,6 +31,15 @@ JSON
   ;;
   sync) echo "{\"changes\": 23, \"accounts\": {\"$A\": 9, \"$S\": 14}, \"skipped\": [\"$J\", \"$T\"], \"dryRun\": true}" ;;
   backups) echo "{\"backups\": [{\"name\": \"2026-11-09\", \"kind\": \"daily\", \"time\": \"2026-11-09\", \"sessions\": 307, \"modified\": $((now - 3600))}, {\"name\": \"2026-11-08\", \"kind\": \"daily\", \"time\": \"2026-11-08\", \"sessions\": 301, \"modified\": $((now - 90000))}, {\"name\": \"2026-11-07\", \"kind\": \"daily\", \"time\": \"2026-11-07\", \"sessions\": 296, \"modified\": $((now - 176400))}]}" ;;
+  # Live usage for the renders: the app asks this only in render mode, never the Keychain.
+  usage-demo) cat <<JSON
+{"accounts": {
+ "$A": {"ok": true, "error": null, "limits": [{"kind": "session", "percent": 12, "resetsAt": null, "label": null}, {"kind": "weekly_all", "percent": 17, "resetsAt": null, "label": null}]},
+ "$S": {"ok": true, "error": null, "limits": [{"kind": "session", "percent": 93, "resetsAt": null, "label": null}, {"kind": "weekly_all", "percent": 76, "resetsAt": null, "label": null}]},
+ "$J": {"ok": false, "error": "http-403", "limits": []}
+}}
+JSON
+  ;;
   update-check) echo '{"available": false}' ;;
   *) echo '{"ok": true}' ;;
 esac
