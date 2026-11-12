@@ -131,8 +131,11 @@ public extension Status {
 
     /// Engine arguments for the debug report. The app adds the settings only it knows
     /// (the keyboard shortcuts), as on/off.
-    static func reportArguments(appSettings: [(String, Bool)]) -> [String] {
+    /// `liveUsage` adds each account's live usage state: "ok", or the newest error type. Never a
+    /// percent or a cookie: the report is for a GitHub issue.
+    static func reportArguments(appSettings: [(String, Bool)], liveUsage: [String: CachedUsage] = [:]) -> [String] {
         ["report"] + appSettings.flatMap { ["--app-setting", "\($0.0)=\($0.1 ? "on" : "off")"] }
+            + liveUsage.sorted { $0.key < $1.key }.flatMap { ["--live-usage", "\($0.key)=\($0.value.error ?? "ok")"] }
     }
 
     /// Lines for the sync preview, for example "jomon@example.com: 16 sessions". Accounts with 0 changes are left out.

@@ -7,7 +7,7 @@ A macOS menu bar app that switches the **Claude desktop app** between your accou
 <p>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/panel-dark.png">
-    <img src="docs/screenshots/panel-light.png" width="380" alt="The menu bar panel with four demo accounts and one session stopped on the usage limit">
+    <img src="docs/screenshots/panel-light.png" width="380" alt="The menu bar panel with four demo accounts: live usage bars for the 5-hour and weekly limits, a Fable bar, an old value after a failed read, and one session stopped on the usage limit">
   </picture>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/sync-preview-dark.png">
@@ -17,7 +17,7 @@ A macOS menu bar app that switches the **Claude desktop app** between your accou
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-accounts-dark.png">
-  <img src="docs/screenshots/settings-accounts-light.png" width="700" alt="Settings, Accounts tab: one table with sessions, login, Mine and Show for each account">
+  <img src="docs/screenshots/settings-accounts-light.png" width="700" alt="Settings, Accounts tab: one table with plan, sessions, last switch, live usage bars, login, Mine and Show for each account">
 </picture>
 
 The screenshots use demo data. `scripts/screenshots.sh` makes them again.
@@ -56,7 +56,13 @@ New in 1.2:
 - **Debug report** lists the plan and the last limit window of each account. Display names and organization names are not in it.
 - **Stopped on usage limit** now names the account that hit the limit, also for a session that sync copied to several accounts.
 
-All of this comes from files on your Mac. The app sends nothing to claude.ai.
+All of this comes from files on your Mac.
+
+New in 1.3:
+
+- **Live usage (off by default).** Turn it on with the **Usage** button in the panel, or in Settings → Accounts. Each account then shows a bar for each limit on its claude.ai Usage page: 5-hour, weekly, and model limits such as Fable. A bar turns orange at 70% and red at 90%, and then shows when the limit resets. See [Live usage](#live-usage).
+- **Warning at 90%.** When the active account reaches 90% of its 5-hour limit, a notification names your account with the most free capacity, with a Switch button. Once for each 5-hour window. Turn it off in Settings → General.
+- **Cleaner panel.** The active account is tinted, a key marks a saved login, and opening Settings closes the panel.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/welcome-dark.png">
@@ -142,6 +148,15 @@ claude-switch sync --dry-run
 
 Run `claude-switch help` to see all commands.
 
+## Live usage
+
+Live usage is **off** until you turn it on. When it is on:
+
+- **What is sent:** one request to claude.ai for each account with a saved login (`GET /api/organizations/<org>/usage`), with that account's own cookies. Nothing else, and to nowhere else. It reads every 10 minutes, and when you open the panel if the last read is 2 minutes old or more.
+- **The Keychain dialog:** the saved cookies are encrypted with the "Claude Safe Storage" key, the same key the Claude app uses. macOS asks you one time to allow Claude Accounts to use it. The app is not notarized, so macOS can ask again after an update. Never allow `/usr/bin/security` with "Always Allow": that would let any program read the key.
+- **What is kept:** the key stays in memory until the app quits. The engine decrypts a copy of each cookie file and gives the cookies only to the app, through a pipe. They are never written to disk. The app keeps the last good usage (percents, reset times, the read time) in its preferences, so a failed read still shows the last value with its age.
+- **The risk:** the usage request is not a public interface. claude.ai can change it at any time. Then the panel shows "Usage unavailable" until the app is updated. The test and the design are in [docs/usage-live.md](docs/usage-live.md).
+
 ## Safety design
 
 The app changes files that the Claude desktop app owns. It is careful with them:
@@ -167,7 +182,7 @@ The Claude desktop app keeps its login under `~/Library/Application Support/Clau
 - If a saved login expires, the app tells you. Sign in again, and the app saves the new login.
 - Sync only between your own accounts. Do not mark an account that another person uses as "mine".
 - The app depends on how the Claude desktop app stores its files. If an update changes that, the layout check stops the switch.
-- The app shows when an account hit a usage limit and when that limit resets. It does not show usage percents: Claude keeps no local record of them ([#30](https://github.com/jomonkj/claude-accounts/issues/30)).
+- Usage percents come only from claude.ai (live usage). Claude keeps no local record of them ([#30](https://github.com/jomonkj/claude-accounts/issues/30)). With live usage off, the app shows only when an account hit a limit and when it resets.
 - A limit hit belongs to the account that `switch.log` shows as active at that time. Before the first logged switch, it belongs to the account folder with the newest copy of the session.
 
 ## Build from source

@@ -468,6 +468,11 @@ check "report from the app lists the shortcut states" 'echo "$out" | grep -q "  
 check "app settings must be key=value words" '! E report --app-setting "x=1 y" >/dev/null'
 for i in $(seq 1 300); do echo "2026-11-02 10:00:00 line $i"; done >> "$R/home/switch.log"
 check "only the last 200 log lines" '[ "$(E report | grep -c "  2026-")" = 200 ] && E report | grep -q "line 300" && ! E report | grep -q "line 100$"'
+out="$(E report --live-usage "$IA=ok" --live-usage "$IB=http-403" --app-setting usageWarning=on)"
+check "report has the live usage state of each account" 'echo "$out" | grep -E "^  account 1:" | grep -q "live usage ok" && echo "$out" | grep -E "^  account 2:" | grep -q "live usage http-403"'
+check "report with live usage has no account ID" '! echo "$out" | grep -qE "[0-9a-f]{8}-[0-9a-f]{4}|aaaa1111|bbbb2222"'
+check "report lists the warning setting" 'echo "$out" | grep -q "  usageWarning: on"'
+check "a live usage state must be ok or an error type" '! E report --live-usage "$IA=sk-ant secret" >/dev/null && ! E report --live-usage "$IA=" >/dev/null'
 
 echo "live usage cookies (usage-cookies)"
 # own fake Mac: A is active (live cookies in the app folder), B has a saved login, C has none

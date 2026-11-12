@@ -526,7 +526,9 @@ final class Store: ObservableObject {
     /// Copies the engine's debug report (no emails, no account IDs) to the clipboard.
     /// Returns a short message for the user.
     func copyDebugReport() async -> String {
-        let r = await run(Status.reportArguments(appSettings: HotKeys.Key.allCases.map { ($0.setting, $0.isOn) }))
+        let r = await run(Status.reportArguments(
+            appSettings: HotKeys.Key.allCases.map { ($0.setting, $0.isOn) } + [(Self.usageWarningKey, usageWarningOn)],
+            liveUsage: liveCache))
         guard r.ok, !r.output.isEmpty else { return "Cannot make the report: \(r.output)" }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(r.output, forType: .string)

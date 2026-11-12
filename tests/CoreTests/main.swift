@@ -245,6 +245,10 @@ func main() async {
     check("report arguments carry the shortcut states",
           Status.reportArguments(appSettings: [("shortcutOpenPanel", true), ("shortcutNextAccount", false)])
           == ["report", "--app-setting", "shortcutOpenPanel=on", "--app-setting", "shortcutNextAccount=off"])
+    check("report arguments carry live usage states, never limits or cookies",
+          Status.reportArguments(appSettings: [], liveUsage: [B: CachedUsage(limits: [], readAt: 0, error: "http-403"),
+                                                                 A: CachedUsage(limits: [LiveLimit(kind: "session", percent: 5, resetsAt: nil, label: nil)], readAt: 1, error: nil)])
+          == ["report", "--live-usage", "\(A)=ok", "--live-usage", "\(B)=http-403"])
 
     print("Account")
     let b = s.account(B)!
