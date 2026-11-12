@@ -16,7 +16,7 @@ struct SettingsView: View {
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
             AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
-        .frame(width: 720, height: 440)
+        .frame(width: 820, height: 440)
         // Checkboxes, not switches: the first switch the app draws costs about 50 MB of graphics
         // memory while the window opens and about 5 MB after it closes (issue #22).
         .toggleStyle(.checkbox)
@@ -134,6 +134,10 @@ struct AccountsTab: View {
                 }.width(min: 80, ideal: 95)
                 TableColumn("Sessions") { a in Text("\(a.sessions)").monospacedDigit() }.width(60)
                 TableColumn("Last switch") { a in Text(a.switchedText).lineLimit(1) }.width(min: 70, ideal: 80)
+                TableColumn("Last limit") { a in
+                    Text(a.lastLimitText()).lineLimit(1).foregroundStyle(a.limit == nil ? .secondary : .primary)
+                        .help(a.limit.map { "Resets \($0.resets.isEmpty ? "at an unknown time" : $0.resets)" } ?? "No usage limit in the last 8 days")
+                }.width(min: 90, ideal: 120)
                 TableColumn("Login") { a in
                     Text(a.savedLogin ? (a.current ? "Active" : "Saved") : "—")
                         .foregroundStyle(a.savedLogin ? .green : .secondary)
