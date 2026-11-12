@@ -17,7 +17,7 @@ A macOS menu bar app that switches the **Claude desktop app** between your accou
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/settings-accounts-dark.png">
-  <img src="docs/screenshots/settings-accounts-light.png" width="620" alt="Settings, Accounts tab: one table with sessions, login, Mine and Show for each account">
+  <img src="docs/screenshots/settings-accounts-light.png" width="700" alt="Settings, Accounts tab: one table with sessions, login, Mine and Show for each account">
 </picture>
 
 The screenshots use demo data. `scripts/screenshots.sh` makes them again.
@@ -48,6 +48,14 @@ New in 1.1:
 - **Remove account.** Its sessions move into the backups, so you can get them back.
 - **Copy debug report** (Settings → About). Emails and account IDs show as "account 1", "account 2".
 - **Uninstall** (Settings → About). Saved logins and backups stay.
+
+New since 1.1.1:
+
+- **Account details.** The panel shows the plan and organization under each account. Settings → Accounts adds Plan and Last switch columns. The data comes from the Claude Code sign-in files (`~/.claude.json`, `~/.claude-*/.claude.json`), so it shows only for accounts signed in to Claude Code.
+- **Last limit hit.** The reset line names the limit: "5-hour limit resets 4:50 PM" or "Weekly limit resets Mon 8:30 PM". Settings → Accounts adds a Last limit column, for example "Weekly · 2 days ago". The data comes from the session transcripts of the last 8 days.
+- **Debug report** lists the plan and the last limit window of each account. Display names and organization names are not in it.
+
+All of this comes from files on your Mac. The app sends nothing to claude.ai.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/welcome-dark.png">
@@ -143,7 +151,7 @@ The app changes files that the Claude desktop app owns. It is careful with them:
 - **Backups.** Sync, restore and remove always make a backup first. A daily backup goes to `~/Backups/claude-sessions`.
 - **Sync never deletes.** The newest copy of each session wins. A session that you deleted in one account is not added back. Accounts that are not "mine" are not read and not written.
 - **Layout check.** Before a switch, the engine checks that the Claude data folder has the layout it knows. If not, it stops and changes nothing.
-- **Private files.** Saved logins are in `~/Library/Application Support/Claude Account Switcher/profiles`, readable only by you (mode 700). Every action is written to `switch.log` in the same folder.
+- **Private files.** Saved logins are in `~/Library/Application Support/Claude Account Switcher/profiles`, readable only by you (mode 700). Every action is written to `switch.log` in the same folder. `limit-scan.json` in the same folder lets the engine read only the new part of each session transcript. It keeps the usage-limit messages, not the text of your sessions.
 
 Tests check this: `tests/crash_test.sh` stops the engine after each step and checks the recovery, and `tests/sync_property_test.py` checks the sync rules on 500 random stores.
 
@@ -158,6 +166,8 @@ The Claude desktop app keeps its login under `~/Library/Application Support/Clau
 - If a saved login expires, the app tells you. Sign in again, and the app saves the new login.
 - Sync only between your own accounts. Do not mark an account that another person uses as "mine".
 - The app depends on how the Claude desktop app stores its files. If an update changes that, the layout check stops the switch.
+- The app shows when an account hit a usage limit and when that limit resets. It does not show usage percents: Claude keeps no local record of them ([#30](https://github.com/jomonkj/claude-accounts/issues/30)).
+- A limit hit belongs to the account that `switch.log` shows as active at that time. Before the first logged switch, it belongs to the account folder with the newest copy of the session.
 
 ## Build from source
 

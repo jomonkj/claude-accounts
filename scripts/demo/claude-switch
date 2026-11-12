@@ -13,10 +13,17 @@ case "$1" in
  "settings": {"syncOnSwitch": false, "syncConfirmed": true, "autoSaveLogins": true, "dailyBackup": true, "backupKeep": 7,
    "showNameInMenuBar": true, "hidden": [], "order": ["$A", "$J", "$T"], "pinned": ["$S"]},
  "accounts": [
-  {"id": "$A", "name": "alex@example.com", "sessions": 142, "lastUsed": $((now - 60)), "savedLogin": true, "savedAt": $((now - 240)), "savedMode": "auto", "current": true, "hidden": false, "owned": true},
-  {"id": "$S", "name": "sam@example.com (Team)", "sessions": 128, "lastUsed": $((now - 7200)), "savedLogin": true, "savedAt": $((now - 7200)), "savedMode": "switch", "current": false, "hidden": false, "owned": true},
-  {"id": "$J", "name": "jordan@example.com", "sessions": 37, "lastUsed": $((now - 3*86400)), "savedLogin": true, "savedAt": $((now - 3*86400)), "savedMode": "switch", "current": false, "hidden": false, "owned": false},
-  {"id": "$T", "name": "taylor@example.com", "sessions": 0, "lastUsed": 0, "savedLogin": false, "savedAt": 0, "savedMode": "", "current": false, "hidden": false, "owned": false}
+  {"id": "$A", "name": "alex@example.com", "sessions": 142, "lastUsed": $((now - 60)), "savedLogin": true, "savedAt": $((now - 240)), "savedMode": "auto", "current": true, "hidden": false, "owned": true,
+   "switchedAt": $((now - 3600)), "details": {"email": "alex@example.com", "displayName": "Alex", "plan": "Max 5x", "orgName": null},
+   "limit": {"window": "5h", "hitAt": $((now - 2*86400)), "resets": "9pm", "resetsAt": $((now - 2*86400 + 9000))}},
+  {"id": "$S", "name": "sam@example.com (Team)", "sessions": 128, "lastUsed": $((now - 7200)), "savedLogin": true, "savedAt": $((now - 7200)), "savedMode": "switch", "current": false, "hidden": false, "owned": true,
+   "switchedAt": $((now - 7200)), "details": {"email": "sam@example.com", "displayName": "Sam", "plan": "Team (5x)", "orgName": "Example Co"},
+   "limit": {"window": "5h", "hitAt": $((now - 1800)), "resets": "4:50pm", "resetsAt": $((now + 5400))}},
+  {"id": "$J", "name": "jordan@example.com", "sessions": 37, "lastUsed": $((now - 3*86400)), "savedLogin": true, "savedAt": $((now - 3*86400)), "savedMode": "switch", "current": false, "hidden": false, "owned": false,
+   "switchedAt": $((now - 3*86400)), "details": {"email": "jordan@example.com", "displayName": "Jordan", "plan": "Pro", "orgName": null},
+   "limit": {"window": "week", "hitAt": $((now - 86400)), "resets": "Mon 8:30pm", "resetsAt": $((now + 3*86400))}},
+  {"id": "$T", "name": "taylor@example.com", "sessions": 0, "lastUsed": 0, "savedLogin": false, "savedAt": 0, "savedMode": "", "current": false, "hidden": false, "owned": false,
+   "switchedAt": 0, "details": {"email": null, "displayName": null, "plan": null, "orgName": null}, "limit": null}
  ],
  "paused": [{"id": "local_demo1", "title": "Refactor the billing module", "account": "$S", "cwd": "/Users/demo/projects/shop",
    "message": "You've hit your session limit", "resets": "4:50pm", "resetsAt": $((now + 5400)), "stoppedAt": "2026-11-08T10:00:00Z"}]}

@@ -440,6 +440,15 @@ check "account named by its email in the app: email and ID get the same placehol
 check "labels are not in the report" '! echo "$out" | grep -qi alex'
 check "home folder shown as ~" 'echo "$out" | grep -q "backup -> ~/Backups" && ! echo "$out" | grep -q "$R"'
 check "another user folder shown as ~" '! echo "$out" | grep -q "demo.user"'
+echo "{\"oauthAccount\":{\"accountUuid\":\"$IB\",\"emailAddress\":\"sam@example.com\",\"displayName\":\"Samwise Person\",\"organizationName\":\"Secretorg Ltd\",\"organizationType\":\"claude_max\",\"userRateLimitTier\":\"default_claude_max_20x\"}}" > "$HOME/.claude.json"
+echo '{"sessionId":"local_r1","cliSessionId":"cli-r1"}' > "$R/app/claude-code-sessions/$IB/o2/local_r1.json"
+mkdir -p "$HOME/.claude/projects/r"
+echo '{"type":"assistant","isApiErrorMessage":true,"timestamp":"'"$(iso 3)"'","message":{"content":[{"type":"text","text":"You'"'"'ve hit your weekly limit · resets Nov 30, 8:30pm (UTC)"}]}}' > "$HOME/.claude/projects/r/cli-r1.jsonl"
+out="$(E report)"
+check "report has the plan of each account" 'echo "$out" | grep -E "^  account 2:" | grep -q "plan Max 20x" && echo "$out" | grep -E "^  account 1:" | grep -q "plan unknown"'
+check "report has the last limit window" 'echo "$out" | grep -E "^  account 2:" | grep -q "last limit weekly" && echo "$out" | grep -E "^  account 1:" | grep -q "last limit none"'
+check "display name and org name are not in the report" '! echo "$out" | grep -qiE "samwise|secretorg"'
+check "still no email and no ID" '[ "$(echo "$out" | grep -cE "[0-9a-f]{8}-[0-9a-f]{4}|@")" = 0 ]'
 check "report has versions, layout, settings" 'echo "$out" | grep -q "Claude version:" && echo "$out" | grep -q "Layout check:" && echo "$out" | grep -q "syncOnSwitch"'
 check "report from Terminal points to the app for shortcuts" 'echo "$out" | grep -q "shortcut settings: see the app"'
 out="$(E report --app-setting shortcutOpenPanel=on --app-setting shortcutNextAccount=off)"
