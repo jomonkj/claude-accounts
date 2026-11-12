@@ -5,5 +5,7 @@ case "$1" in
   status) cat "$(dirname "$0")/status.json" ;;
   fail)   echo "ERROR: Claude did not quit." >&2; exit 1 ;;
   badjson) echo "not json" ;;
+  stdin)  read -r line; echo "{\"got\": \"$line\"}" ;;
+  usage-cookies) read -r line; cat "$(dirname "$0")/usage-cookies.json" ;;
   *)      echo '{"ok": true, "count": 4}' ;;
 esac

@@ -23,9 +23,10 @@ public struct EngineClient: Sendable {
             ?? (NSHomeDirectory() + "/.local/bin/claude-switch"))
     }
 
-    public func run(_ args: [String]) async -> EngineResult {
+    /// `input` goes to the engine's stdin, never into its arguments (used for the Keychain password).
+    public func run(_ args: [String], input: String? = nil) async -> EngineResult {
         let path = self.path
-        return await Task.detached { EngineClient.runSync(path, args) }.value
+        return await Task.detached { EngineClient.runSync(path, args, input: input) }.value
     }
 
     public func status() async throws -> Status {
@@ -34,7 +35,7 @@ public struct EngineClient: Sendable {
         return try JSONDecoder().decode(Status.self, from: Data(r.output.utf8))
     }
 
-    static func runSync(_ path: String, _ args: [String]) -> EngineResult {
+    static func runSync(_ path: String, _ args: [String], input: String? = nil) -> EngineResult {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
@@ -44,7 +45,13 @@ public struct EngineClient: Sendable {
         let out = Pipe(), err = Pipe()
         p.standardOutput = out
         p.standardError = err
+        let stdin = input.map { _ in Pipe() }
+        if let stdin { p.standardInput = stdin }
         do { try p.run() } catch { return EngineResult(ok: false, output: error.localizedDescription) }
+        if let stdin, let input {
+            stdin.fileHandleForWriting.write(Data(input.utf8))
+            try? stdin.fileHandleForWriting.close()
+        }
         let o = out.fileHandleForReading.readDataToEndOfFile()
         let e = err.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()

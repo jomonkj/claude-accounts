@@ -133,6 +133,53 @@ public struct EngineSettings: Decodable, Equatable, Sendable {
     public var order: [String]
     /// Account IDs pinned to the top of the panel.
     public var pinned: [String]
+    /// Show live usage from claude.ai (docs/usage-live.md). Nil from an older engine.
+    public var liveUsage: Bool?
+    public var liveUsageOn: Bool { liveUsage ?? false }
+}
+
+/// Output of `claude-switch usage-cookies`: for each account with a login, the org and the cookie
+/// header for the app's usage request. Secret: keep it in memory only, never log or store it.
+public struct LiveCookiesResult: Decodable, Sendable {
+    public let accounts: [String: LiveCookies]
+}
+
+public struct LiveCookies: Decodable, Sendable {
+    public let ok: Bool
+    public let org: String?
+    public let cookie: String?
+    /// decrypt or no-login; nil when ok.
+    public let error: String?
+}
+
+/// Live usage of one account, from the claude.ai usage request.
+public struct LiveAccountUsage: Equatable, Sendable {
+    public let ok: Bool
+    public let limits: [LiveLimit]
+    /// decrypt, no-login, network, http-<code>, not-json; nil when ok.
+    public let error: String?
+
+    public init(ok: Bool, limits: [LiveLimit], error: String?) {
+        self.ok = ok; self.limits = limits; self.error = error
+    }
+
+    public static func failed(_ error: String) -> LiveAccountUsage { LiveAccountUsage(ok: false, limits: [], error: error) }
+
+    public func limit(_ kind: String) -> LiveLimit? { limits.first { $0.kind == kind } }
+}
+
+/// One bar of the claude.ai Usage page.
+public struct LiveLimit: Equatable, Sendable {
+    /// session, weekly_all, weekly_scoped, or a kind this app does not know yet.
+    public let kind: String
+    public let percent: Double
+    public let resetsAt: Double?
+    /// The model name of a scoped limit, for example "Fable".
+    public let label: String?
+
+    public init(kind: String, percent: Double, resetsAt: Double?, label: String?) {
+        self.kind = kind; self.percent = percent; self.resetsAt = resetsAt; self.label = label
+    }
 }
 
 /// Output of `claude-switch sync --dry-run` and `sync`.

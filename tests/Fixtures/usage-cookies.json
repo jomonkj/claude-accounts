@@ -1,0 +1,5 @@
+{"accounts": {
+ "aaaa1111-0000-0000-0000-000000000000": {"ok": true, "org": "org-a", "cookie": "sessionKey=FAKE-A; lastActiveOrg=org-a", "error": null},
+ "bbbb2222-0000-0000-0000-000000000000": {"ok": true, "org": "org-b", "cookie": "sessionKey=FAKE-B; lastActiveOrg=org-b", "error": null},
+ "cccc3333-0000-0000-0000-000000000000": {"ok": false, "org": null, "cookie": null, "error": "no-login"}
+}}

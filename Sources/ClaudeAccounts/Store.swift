@@ -13,6 +13,13 @@ final class Store: ObservableObject {
     @Published var showHidden = false
     @Published var backups: [BackupInfo] = []
     @Published var update: UpdateInfo?
+    /// Live usage of each account (docs/usage-live.md); empty while the setting is off.
+    @Published var liveUsage: [String: LiveAccountUsage] = [:]
+    /// Why live usage could not be read (for example, no Keychain access), shown in Settings.
+    @Published var liveUsageProblem: String?
+    /// The Claude Safe Storage password, kept in memory only for this launch. Never written anywhere.
+    private var safeStorage: String?
+    private var liveUsageRunning = false
     private var lastUpdateCheck = Date.distantPast
     static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0" }
     private var windows: [String: NSWindow] = [:]
@@ -67,6 +74,34 @@ final class Store: ObservableObject {
         } catch {
             banner = .error("Cannot read the engine output: \(error.localizedDescription)")
         }
+    }
+
+    /// Read live usage from claude.ai, only while the setting is on. The password goes to the
+    /// engine on stdin. A debug render never reads the Keychain.
+    func refreshLiveUsage() async {
+        guard status?.settings.liveUsageOn == true, !RenderMode.isOn() else {
+            liveUsage = [:]; liveUsageProblem = nil; safeStorage = nil
+            return
+        }
+        guard !liveUsageRunning else { return }
+        liveUsageRunning = true
+        defer { liveUsageRunning = false }
+        if safeStorage == nil {
+            switch await Task.detached(operation: { Keychain.claudeSafeStorage() }).value {
+            case .success(let pw): safeStorage = pw
+            case .failure(let f): liveUsageProblem = f.message; return
+            }
+        }
+        // The engine decrypts the cookies; the app sends the requests (Cloudflare challenges the
+        // engine's Python). The cookies stay in memory for this call only.
+        let r = await engine.run(["usage-cookies"], input: (safeStorage ?? "") + "\n")
+        guard r.ok, let cookies = try? JSONDecoder().decode(LiveCookiesResult.self, from: Data(r.output.utf8)) else {
+            liveUsageProblem = r.ok ? "Cannot read the engine output for live usage." : r.output
+            return
+        }
+        let result = await LiveUsageClient.fetch(cookies.accounts)
+        liveUsageProblem = nil
+        if result != liveUsage { liveUsage = result }
     }
 
     /// Finish or roll back a switch that stopped in the middle (for example, the Mac lost power).

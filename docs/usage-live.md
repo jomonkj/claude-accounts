@@ -49,6 +49,19 @@ The weekly and Fable values and the reset time of account 2 match the page exact
 - A second request with the same saved `sessionKey` again got HTTP 200, for both accounts. So a request does not invalidate the saved login on the server.
 - After the test, the app switched to both tested accounts and back (2026-11-12 17:55–17:56). Each switch finished, and none failed its check. So the saved logins still load into Claude.
 
+## 3b. Who sends the request (found while building #47)
+
+Cloudflare challenges some HTTP clients even with valid cookies. Tested on 2026-11-12, without cookies, against the usage request:
+
+| Client | Result |
+|---|---|
+| System Python 3.9 (`/usr/bin/python3`, which runs the engine) | HTTP 403, `cf-mitigated: challenge` (HTML page) |
+| System `curl` 8.7.1 | HTTP 403, `cf-mitigated: challenge` |
+| Homebrew Python 3.14 (which ran the spike) | passes (claude.ai's own JSON error) |
+| Apple `URLSession` | passes (claude.ai's own JSON error) |
+
+So the engine only decrypts the cookies (`usage-cookies`, password on stdin, output only through the pipe to the app). The **app** sends the request with `URLSession`, in an ephemeral session with no cookie storage and no cache. With the engine's Python, every account got HTTP 403. With `URLSession`, the panel matched the Usage page for 2 accounts.
+
 ## 4. Risks
 
 - **Private request.** claude.ai can change or remove it at any time, with no notice. Most of the response is internal code names.

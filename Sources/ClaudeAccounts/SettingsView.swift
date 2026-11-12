@@ -164,8 +164,16 @@ struct AccountsTab: View {
                 Spacer()
                 Text("Drag to sort. Only accounts marked as mine take part in sync.").font(.caption).foregroundStyle(.secondary)
             }
+            Divider()
+            EngineToggle(title: "Show live usage from claude.ai",
+                         help: "Shows the 5-hour and weekly usage under each account. The app sends one request to claude.ai for each account, with that account's own saved login. macOS asks you one time to allow access to the \"Claude Safe Storage\" key. Off by default.",
+                         key: "liveUsage", value: \.liveUsageOn)
+            if let problem = store.liveUsageProblem {
+                Label(problem, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+            }
         }
         .padding()
+        .onChange(of: store.status?.settings.liveUsageOn) { Task { await store.refreshLiveUsage() } }
     }
 }
 

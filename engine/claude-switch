@@ -32,11 +32,13 @@ Commands (all print JSON unless noted):
   update-install <tag>        download, check and install a release, then reopen the app
   uninstall                   remove the app, the login item and the CLI links (keeps saved logins and backups)
   report [--app-setting k=v]  debug report as text, with no emails and no account IDs
+  usage-cookies               claude.ai cookies of each account, for the app's live usage request
+                              (password on stdin; output only to the app; see docs/usage-live.md)
                               (the app adds its own settings, such as the keyboard shortcuts)
 
 <account> is a full account UUID or its first 8 characters.
 """
-import contextlib, datetime, fcntl, functools, glob, hashlib, json, os, platform, plistlib, re, shutil, sqlite3, subprocess, sys, time
+import collections, contextlib, datetime, fcntl, functools, glob, hashlib, json, os, platform, plistlib, re, shutil, sqlite3, subprocess, sys, tempfile, time
 
 HOME = os.path.expanduser("~")
 APP = os.environ.get("CLAUDE_APP_DIR", f"{HOME}/Library/Application Support/Claude")
@@ -65,6 +67,9 @@ CURL = "/usr/bin/curl"
 # Fallback when the API fails (rate limit: 60 requests each hour per IP with no sign-in):
 # the normal github.com release links. Also a test seam.
 WEB = os.environ.get("CLAUDE_ACCOUNTS_WEB", "https://github.com").rstrip("/")
+# Live usage (docs/usage-live.md): the cookies the app sends with its usage request.
+USAGE_COOKIES = ["sessionKey", "sessionKeyV3", "lastActiveOrg", "cf_clearance", "__cf_bm", "anthropic-device-id",
+                 "routingHint", "__Host-ant_trusted_device"]
 CURL_PROTO = "=https,file" if "file://" in API + WEB else "=https"
 GH = os.environ.get("CLAUDE_SWITCH_GH") or shutil.which("gh", path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin") or "gh"
 
@@ -73,7 +78,8 @@ LOGIN_DIRS = ["Local Storage", "Session Storage", "IndexedDB", "WebStorage"]
 CONFIG_KEYS = ["oauth:tokenCacheV2", "lastKnownAccountUuid"]
 DEFAULTS = {"syncOnSwitch": False, "autoSaveLogins": True, "dailyBackup": True,
             "backupKeep": 7, "showNameInMenuBar": True, "hidden": [], "labels": {},
-            "owned": [], "syncConfirmed": False, "order": [], "pinned": []}
+            "owned": [], "syncConfirmed": False, "order": [], "pinned": [],
+            "liveUsage": False}
 LIST_KEYS = ("hidden", "labels", "owned", "order", "pinned")
 
 os.umask(0o077)
@@ -750,6 +756,61 @@ def limit_hits(days=8):
             out[account] = {"window": limit_window(text), "hitAt": hit, "resets": resets,
                             "resetsAt": reset_timestamp(resets, at)}
     return out
+
+
+def decrypt_cookies(db, password):
+    """{name: value} of the claude.ai cookies in a COPY of a Chromium cookie database.
+    Values are "v10": AES-128-CBC with a PBKDF2 key of the Claude Safe Storage password; database
+    version 24 puts a 32-byte hash of the host in front. Raises ValueError when nothing decrypts."""
+    key = hashlib.pbkdf2_hmac("sha1", password.encode(), b"saltysalt", 1003, 16)
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = os.path.join(tmp, "Cookies")
+        shutil.copy2(db, copy)
+        con = sqlite3.connect(copy)
+        try:
+            version = int(dict(con.execute("select key, value from meta")).get("version", 0))
+            rows = con.execute("select name, encrypted_value from cookies where host_key like '%claude.ai'").fetchall()
+        finally:
+            con.close()
+    out = {}
+    for name, blob in rows:
+        if not isinstance(blob, bytes) or not blob.startswith(b"v10"):
+            continue
+        r = subprocess.run(["/usr/bin/openssl", "enc", "-d", "-aes-128-cbc", "-nosalt", "-K", key.hex(), "-iv", "20" * 16],
+                           input=blob[3:], capture_output=True)
+        if r.returncode == 0:
+            with contextlib.suppress(UnicodeDecodeError):
+                out[name] = (r.stdout[32:] if version >= 24 else r.stdout).decode("utf-8")
+    if rows and not out:
+        raise ValueError("no cookie decrypts")
+    return out
+
+
+def usage_cookies(password):
+    """For each account with a login: {ok, org, cookie, error}. The active account uses Claude's own
+    cookies, the others their saved login. The app sends the request itself (URLSession): Cloudflare
+    challenges the system Python and curl (docs/usage-live.md). The password comes on stdin. The
+    output goes only to the app through a pipe; the engine never writes the password or a cookie."""
+    cur = current_account()
+    out = {}
+    for a in known_accounts():
+        db = os.path.join(APP, "Cookies") if a == cur else os.path.join(PROFILES, a, "Cookies")
+        if not os.path.isfile(db):
+            continue
+        try:
+            cookies = decrypt_cookies(db, password)
+        except (ValueError, OSError, sqlite3.Error):
+            out[a] = {"ok": False, "org": None, "cookie": None, "error": "decrypt"}
+            continue
+        if "sessionKey" not in cookies or "lastActiveOrg" not in cookies:
+            out[a] = {"ok": False, "org": None, "cookie": None, "error": "no-login"}
+            continue
+        out[a] = {"ok": True, "org": cookies["lastActiveOrg"], "error": None,
+                  "cookie": "; ".join(f"{n}={cookies[n]}" for n in USAGE_COOKIES if n in cookies)}
+    errors = collections.Counter(r["error"] for r in out.values() if not r["ok"])
+    why = f" ({', '.join(f'{e}: {n}' for e, n in sorted(errors.items()))})" if errors else ""
+    log(f"usage-cookies: {sum(r['ok'] for r in out.values())} ok, {sum(errors.values())} failed{why}")
+    return {"accounts": out}
 
 
 def list_backups():
@@ -1588,6 +1649,13 @@ def main(argv):
         out = uninstall()
         if out is None:  # already printed
             return 0
+    elif cmd == "usage-cookies":
+        if args:
+            raise Fail("usage-cookies takes no arguments. Give the Claude Safe Storage password on stdin only.")
+        password = "" if sys.stdin.isatty() else sys.stdin.readline().strip()
+        if not password:
+            raise Fail("Give the Claude Safe Storage password on stdin.")
+        out = usage_cookies(password)
     elif cmd == "open-session":
         open_claude(f"claude://claude.ai/epitaxy/{args[0]}"); out = {"ok": True}
     else:
