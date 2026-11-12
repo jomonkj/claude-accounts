@@ -405,6 +405,21 @@ func main() async {
     let oldSettings = try! JSONDecoder().decode(EngineSettings.self, from: Data(#"{"syncOnSwitch":false,"syncConfirmed":false,"autoSaveLogins":true,"dailyBackup":true,"backupKeep":7,"showNameInMenuBar":true,"hidden":[],"order":[],"pinned":[]}"#.utf8))
     check("older status without the setting means off", oldSettings.liveUsageOn == false)
 
+    print("Promotion (star request, what's new)")
+    check("no star request before 10 successful switches", !Promotion.shouldAskForStar(successfulSwitches: 9, answered: false))
+    check("a star request from the 10th successful switch", Promotion.shouldAskForStar(successfulSwitches: 10, answered: false)
+          && Promotion.shouldAskForStar(successfulSwitches: 25, answered: false))
+    check("an answered star request never shows again", !Promotion.shouldAskForStar(successfulSwitches: 50, answered: true))
+    check("star request text", Promotion.starRequestText(successfulSwitches: 12)
+          == "Claude Accounts saved you 12 sign-outs. A star on GitHub helps other people find it.")
+    check("what's new after an update to a release", Promotion.whatsNew(current: "1.3.0", lastSeen: "1.2.0") == "1.3.0")
+    check("no what's new on the first install", Promotion.whatsNew(current: "1.3.0", lastSeen: nil) == nil)
+    check("no what's new when the version did not change", Promotion.whatsNew(current: "1.3.0", lastSeen: "1.3.0") == nil)
+    check("no what's new for a development build", Promotion.whatsNew(current: "1.2.0-8-g68e5dc3", lastSeen: "1.2.0") == nil)
+    check("only release versions are remembered", Promotion.isRelease("1.3.0") && !Promotion.isRelease("1.2.0-8-g68e5dc3") && !Promotion.isRelease("ci-abc1234"))
+    check("the repo and release links", Promotion.repoURL.absoluteString == "https://github.com/jomonkj/claude-accounts"
+          && Promotion.releaseURL(version: "1.3.0").absoluteString == "https://github.com/jomonkj/claude-accounts/releases/tag/v1.3.0")
+
     try? FileManager.default.removeItem(at: log)
     print("\n\(passed) passed, \(failed) failed")
     exit(failed == 0 ? 0 : 1)

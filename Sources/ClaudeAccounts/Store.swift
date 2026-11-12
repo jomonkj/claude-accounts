@@ -209,6 +209,7 @@ final class Store: ObservableObject {
             await refresh()
             let obj = v.json
             if obj["ok"] as? Bool == true {
+                recordSuccessfulSwitch()
                 let text = "Signed in as \(a.title)." + (shared > 0 ? " \(shared) sessions shared." : "")
                 banner = warning.map { .warning(text + " " + $0) } ?? .success(text)
                 notifier.say("Switched account", text)
@@ -234,6 +235,57 @@ final class Store: ObservableObject {
             }
             switchTo(next)
         }
+    }
+
+    // MARK: GitHub invitations (see ClaudeAccountsCore/Promotion.swift). Counts stay in the
+    // app's preferences and are never sent anywhere. The app never stars the repo itself.
+
+    private static let switchesKey = "successfulSwitches"
+    private static let starAnsweredKey = "starRequestAnswered"
+    private static let lastSeenVersionKey = "lastSeenVersion"
+
+    var successfulSwitches: Int { UserDefaults.standard.integer(forKey: Self.switchesKey) }
+
+    /// The one-time star request in the panel. Never in a debug render.
+    var showStarRequest: Bool {
+        !RenderMode.isOn() && Promotion.shouldAskForStar(
+            successfulSwitches: successfulSwitches, answered: UserDefaults.standard.bool(forKey: Self.starAnsweredKey))
+    }
+
+    /// The version to announce with "What's new" after an update, until the user closes it.
+    @Published var whatsNewVersion: String? = Store.checkWhatsNew()
+
+    private static func checkWhatsNew() -> String? {
+        guard !RenderMode.isOn() else { return nil }
+        let d = UserDefaults.standard
+        let new = Promotion.whatsNew(current: version, lastSeen: d.string(forKey: lastSeenVersionKey))
+        if new == nil, Promotion.isRelease(version) { d.set(version, forKey: lastSeenVersionKey) }
+        return new
+    }
+
+    private func recordSuccessfulSwitch() {
+        UserDefaults.standard.set(successfulSwitches + 1, forKey: Self.switchesKey)
+        objectWillChange.send()
+    }
+
+    /// Either button answers the star request for good.
+    func answerStarRequest(star: Bool) {
+        UserDefaults.standard.set(true, forKey: Self.starAnsweredKey)
+        objectWillChange.send()
+        if star { openGitHub() }
+    }
+
+    func closeWhatsNew(open: Bool) {
+        if let v = whatsNewVersion {
+            UserDefaults.standard.set(v, forKey: Self.lastSeenVersionKey)
+            if open { closePanel(); NSWorkspace.shared.open(Promotion.releaseURL(version: v)) }
+        }
+        whatsNewVersion = nil
+    }
+
+    func openGitHub() {
+        closePanel()
+        NSWorkspace.shared.open(Promotion.repoURL)
     }
 
     /// The panel's own window, recorded by the panel view (see WindowReader).

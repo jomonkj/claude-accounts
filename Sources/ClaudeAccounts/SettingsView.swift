@@ -313,6 +313,16 @@ struct AboutTab: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text("MIT License. Copyright 2026 Jomon Johnson.")
                     .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Button { store.openGitHub() } label: { Label("Star on GitHub", systemImage: "star") }
+                    if Promotion.isRelease(Store.version) {
+                        Button("What's new in \(Store.version)") {
+                            NSWorkspace.shared.open(Promotion.releaseURL(version: Store.version))
+                        }
+                    }
+                }
+                Text("Free and open source. A star helps other people find it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Report a problem") {
                 Text("The debug report has the app and Claude versions, the layout check, the settings (with the keyboard shortcuts) and the last 200 log lines. Emails and account IDs show as \"account 1\", \"account 2\" and so on.")
