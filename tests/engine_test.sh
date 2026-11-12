@@ -222,6 +222,18 @@ echo 'not json' > "$S"
 check "an unreadable scan cache is rebuilt" '[ "$(lim AAAA)" = "('"'"'5h'"'"', True)" ]'
 check "the cache holds no transcript text beyond the limit message" '! grep -q "\"type\"" "$S"'
 cp "$T/log.keep" "$CLAUDE_SWITCH_HOME/switch.log"
+
+echo "paused session: the account active at the stop time"
+sess AAAAAAAA-1 local_pz cli-pz; sess BBBBBBBB-2 local_pz cli-pz
+touch -t "$(date -v+1M +%Y%m%d%H%M)" "$A/claude-code-sessions/BBBBBBBB-2/org/local_pz.json"
+err 0.3 "You've hit your 5-hour limit · resets 8pm (UTC)" > "$Q/cli-pz.jsonl"
+paused_acct() { E status | /usr/bin/python3 -c "import json,sys;print([p['account'] for p in json.load(sys.stdin)['paused'] if p['id']=='local_pz'])"; }
+check "without a log entry the newest copy owns the paused session" '[ "$(paused_acct)" = "['"'"'BBBBBBBB-2'"'"']" ]'
+echo "$(logtime 0.5) switched to AAAAAAAA-1" >> "$CLAUDE_SWITCH_HOME/switch.log"
+check "the account active at the stop time owns the paused session" '[ "$(paused_acct)" = "['"'"'AAAAAAAA-1'"'"']" ]'
+echo "$(logtime 0.4) switched to DDDDDDDD-9" >> "$CLAUDE_SWITCH_HOME/switch.log"
+check "an unknown account in the log is ignored" '[ "$(paused_acct)" = "['"'"'BBBBBBBB-2'"'"']" ]'
+cp "$T/log.keep" "$CLAUDE_SWITCH_HOME/switch.log"
 rm -rf "$Q" "$A"/claude-code-sessions/*/org; mv "$T/cli-p1.keep" "$HOME/.claude/projects/p/cli-p1.jsonl"
 
 echo "version and layout guard"
