@@ -975,7 +975,11 @@ def report(app_settings=None):
     for a in st["accounts"]:
         flags = [f for f, on in (("current", a["current"]), ("mine", a["owned"]), ("hidden", a["hidden"]),
                                  ("saved login", a["savedLogin"])) if on]
-        out.append(f"  {a['id']}: {a['sessions']} sessions" + (", " + ", ".join(flags) if flags else ""))
+        # Plan and limit window only: display name and org name could identify the user.
+        plan = (a.get("details") or {}).get("plan") or "unknown"
+        window = {"5h": "5-hour", "week": "weekly"}.get((a.get("limit") or {}).get("window"), "unknown") if a.get("limit") else "none"
+        out.append(f"  {a['id']}: {a['sessions']} sessions" + (", " + ", ".join(flags) if flags else "")
+                   + f", plan {plan}, last limit {window}")
     if not st["accounts"]:
         out.append("  none")
     out += ["", f"Paused sessions: {len(st['paused'])}", "", "Last log lines:"]

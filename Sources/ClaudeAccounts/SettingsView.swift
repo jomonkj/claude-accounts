@@ -16,7 +16,7 @@ struct SettingsView: View {
             AdvancedTab().tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }.tag("advanced")
             AboutTab().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
-        .frame(width: 820, height: 440)
+        .frame(width: 900, height: 440)
         // Checkboxes, not switches: the first switch the app draws costs about 50 MB of graphics
         // memory while the window opens and about 5 MB after it closes (issue #22).
         .toggleStyle(.checkbox)
@@ -125,19 +125,21 @@ struct AccountsTab: View {
                     }
                     .help("Organization: \(a.orgText)")
                 }
-                .width(min: 180, ideal: 200, max: 240)
+                .width(min: 160, ideal: 180, max: 220)
                 TableColumn("Plan") { a in
                     VStack(alignment: .leading, spacing: 0) {
                         Text(a.planText).lineLimit(1)
-                        Text(a.orgText).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        if let org = a.details?.orgName {
+                            Text(org).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        }
                     }
-                }.width(min: 80, ideal: 95)
-                TableColumn("Sessions") { a in Text("\(a.sessions)").monospacedDigit() }.width(60)
+                }.width(min: 80, ideal: 90)
+                TableColumn("Sessions") { a in Text("\(a.sessions)").monospacedDigit() }.width(55)
                 TableColumn("Last switch") { a in Text(a.switchedText).lineLimit(1) }.width(min: 70, ideal: 80)
                 TableColumn("Last limit") { a in
                     Text(a.lastLimitText()).lineLimit(1).foregroundStyle(a.limit == nil ? .secondary : .primary)
                         .help(a.limit.map { "Resets \($0.resets.isEmpty ? "at an unknown time" : $0.resets)" } ?? "No usage limit in the last 8 days")
-                }.width(min: 90, ideal: 120)
+                }.width(min: 110, ideal: 140)
                 TableColumn("Login") { a in
                     Text(a.savedLogin ? (a.current ? "Active" : "Saved") : "—")
                         .foregroundStyle(a.savedLogin ? .green : .secondary)

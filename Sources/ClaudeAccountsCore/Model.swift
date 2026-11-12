@@ -32,8 +32,9 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     /// "Weekly · 2 days ago" for the Settings table, or a dash.
     public func lastLimitText(now: Date = Date()) -> String {
         guard let l = limit else { return Self.none }
-        return l.windowName + " · " + RelativeDateTimeFormatter().localizedString(
-            for: Date(timeIntervalSince1970: l.hitAt), relativeTo: now)
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return l.windowName + " · " + f.localizedString(for: Date(timeIntervalSince1970: l.hitAt), relativeTo: now)
     }
 
     /// Panel line: email (when the title does not already have it), plan and organization, only the
