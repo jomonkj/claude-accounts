@@ -111,6 +111,10 @@ struct WelcomeView: View {
             .formStyle(.grouped)
             Text("You find everything later in the menu bar icon and in Settings.")
                 .font(.caption).foregroundStyle(.secondary)
+            Link(destination: Promotion.repoURL) {
+                Label("Free and open source on GitHub", systemImage: "star")
+            }
+            .font(.caption)
         }
     }
 }

@@ -290,6 +290,48 @@ struct BannerView: View {
     }
 }
 
+/// One-time request, from the 10th successful switch. Either button hides it for good.
+struct StarRequestCard: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "star.fill").foregroundStyle(.yellow)
+                Text(Promotion.starRequestText(successfulSwitches: store.successfulSwitches))
+                    .font(.system(size: 11)).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Spacer()
+                Button("No thanks") { store.answerStarRequest(star: false) }.controlSize(.small)
+                Button { store.answerStarRequest(star: true) } label: { Label("Star on GitHub", systemImage: "star") }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.12)))
+        .padding(.horizontal, 10).padding(.top, 8)
+    }
+}
+
+/// After an update to a new release: a link to its release notes on GitHub.
+struct WhatsNewCard: View {
+    @EnvironmentObject var store: Store
+    let version: String
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
+            Text("Updated to \(version)").font(.system(size: 11, weight: .medium))
+            Button("What's new") { store.closeWhatsNew(open: true) }.buttonStyle(.link).font(.system(size: 11))
+            Spacer(minLength: 4)
+            Button { store.closeWhatsNew(open: false) } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
+                .buttonStyle(.borderless).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.1)))
+        .padding(.horizontal, 10).padding(.top, 8)
+    }
+}
+
 struct MenuView: View {
     @EnvironmentObject var store: Store
 
@@ -298,6 +340,8 @@ struct MenuView: View {
             header
             Divider()
             if let b = store.banner { BannerView(banner: b) { store.banner = nil } }
+            if let v = store.whatsNewVersion { WhatsNewCard(version: v) }
+            else if store.showStarRequest { StarRequestCard() }
             if let u = store.update, u.available, let tag = u.latest {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
