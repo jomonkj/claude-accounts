@@ -569,8 +569,9 @@ def session_data(path):
 
 
 def paused_sessions(days=3):
-    """Sessions whose last turn ended on a usage-limit error."""
-    newest = {}
+    """Sessions whose last turn ended on a usage-limit error. The account is the one active at
+    the stop time (see owner_at), because sync copies a session into several account folders."""
+    newest, timeline, known = {}, None, set()
     for m, d, f in recent_sessions(days).values():
         sid = d.get("sessionId")
         if sid and (sid not in newest or newest[sid][0] < m):
@@ -594,7 +595,14 @@ def paused_sessions(days=3):
         reset = re.search(r"resets? ([^·\n]+)", text)
         resets = reset.group(1).strip() if reset else ""
         stopped = last.get("timestamp", "")
-        out.append({"id": sid, "title": d.get("title") or "Untitled", "account": f.split(os.sep)[-3],
+        if timeline is None:
+            timeline, known = active_timeline(), set(known_accounts())
+        try:
+            at = datetime.datetime.fromisoformat(stopped.replace("Z", "+00:00")).timestamp()
+        except (ValueError, AttributeError):
+            at = None
+        account = owner_at(at, timeline, known, f.split(os.sep)[-3])
+        out.append({"id": sid, "title": d.get("title") or "Untitled", "account": account,
                     "cwd": d.get("cwd", ""), "message": text.strip()[:160], "resets": resets,
                     "resetsAt": reset_timestamp(resets, stopped), "stoppedAt": stopped})
     out.sort(key=lambda x: x["stoppedAt"], reverse=True)
@@ -617,6 +625,15 @@ def active_timeline():
                 out.append((t, m[2] or m[3] or m[4]))
     out.sort()
     return out
+
+
+def owner_at(at, timeline, known, fallback):
+    """The account that used Claude at `at` (epoch), from the switch log timeline. `fallback`
+    (the folder of the newest copy of the session) when the log has no known account before `at`."""
+    if at is None:
+        return fallback
+    active = [a for t, a in timeline if t <= at]
+    return active[-1] if active and active[-1] in known else fallback
 
 
 def limit_window(text):
@@ -725,8 +742,7 @@ def limit_hits(days=8):
     out = {}
     for cli, entry in scans.items():
         for hit, text, at in entry["hits"]:
-            active = [a for t, a in timeline if t <= hit]
-            account = active[-1] if active and active[-1] in known else newest[cli][1]
+            account = owner_at(hit, timeline, known, newest[cli][1])
             if account in out and out[account]["hitAt"] >= hit:
                 continue
             reset = re.search(r"resets? ([^·\n]+)", text)
