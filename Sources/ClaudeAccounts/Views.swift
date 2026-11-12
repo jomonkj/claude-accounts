@@ -68,7 +68,7 @@ struct AccountRow: View {
                         }
                     }
                     if let line = account.detailsLine {
-                        Text(line).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Text(line).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                     }
                     Text("\(account.sessions) sessions · \(account.lastUsedText)")
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
