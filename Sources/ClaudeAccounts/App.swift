@@ -13,7 +13,7 @@ struct ClaudeAccountsApp: App {
         if let i = args.firstIndex(of: "--render"), i + 1 < args.count {
             let path = args[i + 1]
             Task { @MainActor in
-                let store = Store(startTimer: false); await store.refresh()
+                let store = Store(startTimer: false); await store.refresh(); await store.refreshLiveUsage()
                 await renderSnapshot(MenuView().environmentObject(store), path, dark: dark); exit(0)
             }
         }

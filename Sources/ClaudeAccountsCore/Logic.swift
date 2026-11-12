@@ -173,14 +173,15 @@ public extension Status {
         return "\(name) resets " + Self.resetTime(Date(timeIntervalSince1970: next), now: now, timeZone: timeZone)
     }
 
-    /// Live usage line under an account, for example "5h 42% · wk 16%". Nil when the setting is off
-    /// or the account was not asked (no login).
-    func liveLine(for accountID: String, usage: [String: LiveAccountUsage]) -> String? {
+    /// Live usage under an account: the 5-hour and weekly bars, or why they are unavailable.
+    /// Nil when the setting is off or the account was not asked (no login).
+    func liveState(for accountID: String, usage: [String: LiveAccountUsage]) -> LiveRowState? {
         guard settings.liveUsageOn, let u = usage[accountID] else { return nil }
-        guard u.ok else { return "Live usage: unavailable" }
-        let parts = [("5h", u.limit("session")), ("wk", u.limit("weekly_all"))]
-            .compactMap { name, l in l.map { "\(name) \(Int($0.percent.rounded()))%" } }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        guard u.ok else { return .unavailable(LiveAccountUsage.reason(u.error ?? "")) }
+        let bars = [("5h", "session"), ("Week", "weekly_all")].compactMap { label, kind in
+            u.limit(kind).map { UsageBar(label: label, percent: $0.percent) }
+        }
+        return bars.isEmpty ? .unavailable("claude.ai sent no usage for this account.") : .bars(bars)
     }
 
     /// Second line of a paused session row: the reset time while it is in the future, then the account.

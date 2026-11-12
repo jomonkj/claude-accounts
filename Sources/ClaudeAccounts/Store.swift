@@ -79,7 +79,13 @@ final class Store: ObservableObject {
     /// Read live usage from claude.ai, only while the setting is on. The password goes to the
     /// engine on stdin. A debug render never reads the Keychain.
     func refreshLiveUsage() async {
-        guard status?.settings.liveUsageOn == true, !RenderMode.isOn() else {
+        if RenderMode.isOn() {  // demo renders: the demo engine's usage, never the Keychain
+            struct Demo: Decodable { let accounts: [String: LiveAccountUsage] }
+            let r = await engine.run(["usage-demo"])
+            liveUsage = (try? JSONDecoder().decode(Demo.self, from: Data(r.output.utf8)))?.accounts ?? [:]
+            return
+        }
+        guard status?.settings.liveUsageOn == true else {
             liveUsage = [:]; liveUsageProblem = nil; safeStorage = nil
             return
         }
@@ -189,17 +195,29 @@ final class Store: ObservableObject {
         }
     }
 
-    /// ⌃⌥⌘C: open the panel, as a click on the menu bar icon does.
-    func openPanel() {
-        NSApp.activate(ignoringOtherApps: true)
+    /// The panel's own window, recorded by the panel view (see WindowReader).
+    weak var panelWindow: NSWindow?
+
+    /// The menu bar icon. A click on it opens or closes the panel.
+    private func statusButton() -> NSStatusBarButton? {
         func button(in v: NSView?) -> NSStatusBarButton? {
             guard let v else { return nil }
             if let b = v as? NSStatusBarButton { return b }
             return v.subviews.lazy.compactMap { button(in: $0) }.first
         }
-        for w in NSApp.windows where w.className.contains("StatusBar") {
-            if let b = button(in: w.contentView) { b.performClick(nil); return }
-        }
+        return NSApp.windows.lazy.filter { $0.className.contains("StatusBar") }.compactMap { button(in: $0.contentView) }.first
+    }
+
+    /// ⌃⌥⌘C: open the panel, as a click on the menu bar icon does.
+    func openPanel() {
+        NSApp.activate(ignoringOtherApps: true)
+        statusButton()?.performClick(nil)
+    }
+
+    /// Close the panel, so a window opened from it is not hidden behind it.
+    func closePanel() {
+        guard panelWindow?.isVisible == true else { return }
+        statusButton()?.performClick(nil)
     }
 
     /// Turns a shortcut on or off (Settings → General).
@@ -343,7 +361,10 @@ final class Store: ObservableObject {
     }
 
     func set(_ key: String, _ value: Bool) {
-        Task { await perform("Saving…", ["set", key, value ? "true" : "false"]) }
+        Task {
+            await perform("Saving…", ["set", key, value ? "true" : "false"])
+            if key == "liveUsage" { await refreshLiveUsage() }
+        }
     }
 
     func setNumber(_ key: String, _ value: Int) {
@@ -400,6 +421,7 @@ final class Store: ObservableObject {
     /// Opens (or brings to front) a normal window. The app is a menu bar app, so it must
     /// activate itself for the window to come to the front.
     func open<V: View>(_ id: String, title: String, _ view: V) {
+        closePanel()
         NSApp.activate(ignoringOtherApps: true)
         if let w = windows[id] { w.makeKeyAndOrderFront(nil); return }
         let w = NSWindow(contentViewController: NSHostingController(rootView: view.environmentObject(self)))

@@ -72,6 +72,9 @@ public struct Account: Identifiable, Decodable, Equatable, Sendable {
     public var colorIndex: Int { id.unicodeScalars.reduce(0) { $0 &+ Int($1.value) } }
 
     public var lastUsedText: String { lastUsed > 0 ? "used " + Self.relative(lastUsed) : "never used" }
+    /// The panel's last line: "Used 55 minutes ago". The session count is left out: sync gives
+    /// every "mine" account the same sessions, so it does not tell the accounts apart.
+    public var lastUsedLine: String { lastUsed > 0 ? "Used " + Self.relative(lastUsed) : "Never used" }
 
     public var loginText: String {
         guard savedLogin else { return "No saved login" }
@@ -152,8 +155,8 @@ public struct LiveCookies: Decodable, Sendable {
     public let error: String?
 }
 
-/// Live usage of one account, from the claude.ai usage request.
-public struct LiveAccountUsage: Equatable, Sendable {
+/// Live usage of one account, from the claude.ai usage request. Decodable for demo renders only.
+public struct LiveAccountUsage: Equatable, Sendable, Decodable {
     public let ok: Bool
     public let limits: [LiveLimit]
     /// decrypt, no-login, network, http-<code>, not-json; nil when ok.
@@ -166,10 +169,52 @@ public struct LiveAccountUsage: Equatable, Sendable {
     public static func failed(_ error: String) -> LiveAccountUsage { LiveAccountUsage(ok: false, limits: [], error: error) }
 
     public func limit(_ kind: String) -> LiveLimit? { limits.first { $0.kind == kind } }
+
+    /// An error type in plain words, for the panel's help text.
+    public static func reason(_ error: String) -> String {
+        switch error {
+        case "network": "No connection to claude.ai."
+        case "no-login": "This account has no saved login."
+        case "decrypt": "The saved login could not be read."
+        case "not-json": "claude.ai sent an unexpected answer."
+        case "http-401": "The saved login has expired. Switch to this account to sign in again."
+        case "http-403": "claude.ai refused the request (HTTP 403)."
+        default:
+            error.hasPrefix("http-") ? "claude.ai answered with an error (HTTP \(error.dropFirst(5)))." : "Live usage failed (\(error))."
+        }
+    }
+}
+
+/// How full a usage bar is: the bar color in the panel.
+public enum UsageLevel: Equatable, Sendable {
+    case normal, high, critical
+
+    public init(percent: Double) {
+        self = percent >= 90 ? .critical : percent >= 70 ? .high : .normal
+    }
+}
+
+/// One usage bar in the panel, for example "5h 42%".
+public struct UsageBar: Equatable, Sendable {
+    public let label: String
+    public let percent: Double
+
+    public init(label: String, percent: Double) { self.label = label; self.percent = percent }
+
+    public var text: String { "\(Int(percent.rounded()))%" }
+    public var fraction: Double { min(max(percent / 100, 0), 1) }
+    public var level: UsageLevel { UsageLevel(percent: percent) }
+}
+
+/// What the panel shows for live usage under one account.
+public enum LiveRowState: Equatable, Sendable {
+    case bars([UsageBar])
+    /// The reason in plain words.
+    case unavailable(String)
 }
 
 /// One bar of the claude.ai Usage page.
-public struct LiveLimit: Equatable, Sendable {
+public struct LiveLimit: Equatable, Sendable, Decodable {
     /// session, weekly_all, weekly_scoped, or a kind this app does not know yet.
     public let kind: String
     public let percent: Double

@@ -33,12 +33,15 @@ struct SectionTitle: View {
 
 struct HoverRow<Content: View>: View {
     var highlight = true
+    /// A light accent tint that marks the row (the active account).
+    var selected = false
     @ViewBuilder let content: Content
     @State private var hover = false
     var body: some View {
         content
-            .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(hover && highlight ? Color.primary.opacity(0.06) : .clear))
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(
+                selected ? Color.accentColor.opacity(0.09) : hover && highlight ? Color.primary.opacity(0.06) : .clear))
             .contentShape(Rectangle())
             .onHover { hover = $0 }
     }
@@ -49,39 +52,27 @@ struct AccountRow: View {
     let account: Account
 
     var body: some View {
-        HoverRow(highlight: !account.current) {
+        HoverRow(highlight: !account.current, selected: account.current) {
             HStack(spacing: 10) {
                 Avatar(account: account)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Text(account.title).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                        if store.isPinned(account) {
-                            Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
-                                .help("Pinned to the top")
-                        }
-                        if account.owned {
-                            Text("MINE").font(.system(size: 8.5, weight: .bold))
-                                .padding(.horizontal, 4).padding(.vertical, 1)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.18)))
-                                .foregroundStyle(Color.accentColor)
-                                .help("Marked as mine: sync includes this account")
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 3) {
+                    titleLine
                     if let line = account.detailsLine {
                         Text(line).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                     }
-                    if let live = store.status?.liveLine(for: account.id, usage: store.liveUsage) {
-                        Text(live).font(.system(size: 11, weight: .medium)).monospacedDigit()
-                            .foregroundStyle(store.liveUsage[account.id]?.ok == false ? .secondary : .primary).lineLimit(1)
+                    if let state = store.status?.liveState(for: account.id, usage: store.liveUsage) {
+                        LiveUsageView(state: state).padding(.vertical, 1)
                     }
-                    Text("\(account.sessions) sessions · \(account.lastUsedText)")
-                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                    Text(account.loginText)
-                        .font(.system(size: 10)).foregroundStyle(account.savedLogin ? .green : .secondary).lineLimit(1)
+                    Text(account.lastUsedLine)
+                        .font(.system(size: 10.5)).foregroundStyle(.tertiary).lineLimit(1)
+                        .help("\(account.sessions) sessions")
+                    if !account.savedLogin && !account.current {
+                        Text(account.loginText).font(.system(size: 10.5)).foregroundStyle(.orange).lineLimit(1)
+                    }
                     // Re-check every 30 s, so the line goes away when the reset time passes.
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         if let line = store.status?.resetLine(for: account.id, now: ctx.date) {
-                            Text(line).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                            Label(line, systemImage: "clock").font(.system(size: 10.5)).foregroundStyle(.orange).lineLimit(1)
                         }
                     }
                 }
@@ -90,6 +81,28 @@ struct AccountRow: View {
             }
         }
         .contextMenu { AccountMenu(account: account) }
+    }
+
+    /// Name, then small marks: pinned, mine, and a key when the login is saved (time in the help text).
+    var titleLine: some View {
+        HStack(spacing: 5) {
+            Text(account.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+            if store.isPinned(account) {
+                Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                    .help("Pinned to the top")
+            }
+            if account.owned {
+                Text("MINE").font(.system(size: 8.5, weight: .bold))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.18)))
+                    .foregroundStyle(Color.accentColor)
+                    .help("Marked as mine: sync includes this account")
+            }
+            if account.savedLogin {
+                Image(systemName: "key.fill").font(.system(size: 9)).foregroundStyle(.green)
+                    .help(account.loginText)
+            }
+        }
     }
 
     @ViewBuilder var trailing: some View {
@@ -104,6 +117,80 @@ struct AccountRow: View {
                 .controlSize(.small).disabled(store.busy != nil)
                 .help("Sign in to this account in Claude one time. The app saves the login. After that, one click switches to it.")
         }
+    }
+}
+
+/// The live usage on/off switch at the top of the account list. The same setting as in
+/// Settings → Accounts. A button, not a slider switch: the first slider switch costs about 50 MB (#22).
+struct LiveUsageToggle: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        let on = store.status?.settings.liveUsageOn ?? false
+        Button {
+            store.set("liveUsage", !on)
+        } label: {
+            Label("Usage", systemImage: on ? "chart.bar.fill" : "chart.bar")
+                .font(.system(size: 10, weight: .semibold))
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(Capsule().fill(on ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.07)))
+                .foregroundStyle(on ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(store.busy != nil)
+        .help(on ? "Live usage from claude.ai is on. Click to turn it off."
+                 : "Show the 5-hour and weekly usage of each account, live from claude.ai. The app sends one request to claude.ai for each account, with that account's own saved login. macOS asks one time for the \"Claude Safe Storage\" key.")
+    }
+}
+
+/// Live usage under an account: one bar each for the 5-hour and the weekly limit, or why it is unavailable.
+struct LiveUsageView: View {
+    let state: LiveRowState
+
+    var body: some View {
+        switch state {
+        case .bars(let bars):
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(bars, id: \.label) { UsageBarView(bar: $0) }
+            }
+            .help(bars.map { "\($0.label == "5h" ? "5-hour limit" : "Weekly limit"): \($0.text) used" }.joined(separator: "\n")
+                  + "\nLive from claude.ai")
+        case .unavailable(let reason):
+            Label("Usage unavailable", systemImage: "exclamationmark.circle")
+                .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                .help(reason)
+        }
+    }
+}
+
+struct UsageBarView: View {
+    let bar: UsageBar
+
+    var color: Color {
+        switch bar.level {
+        case .normal: .accentColor
+        case .high: .orange
+        case .critical: .red
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(bar.label).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                .frame(width: 32, alignment: .leading)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.12))
+                    Capsule().fill(color).frame(width: max(g.size.width * bar.fraction, bar.fraction > 0 ? 4 : 0))
+                }
+            }
+            .frame(height: 5)
+            // Only a high or critical percent draws the eye; a normal one stays quiet.
+            Text(bar.text).font(.system(size: 10.5, weight: bar.level == .normal ? .medium : .semibold)).monospacedDigit()
+                .foregroundStyle(bar.level == .normal ? AnyShapeStyle(.secondary) : AnyShapeStyle(color))
+                .frame(width: 32, alignment: .trailing)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -205,7 +292,11 @@ struct MenuView: View {
             if let w = store.wrongAccountHint, store.banner == nil { BannerView(banner: .warning(w)) {} }
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    SectionTitle(text: "Accounts")
+                    HStack(alignment: .lastTextBaseline) {
+                        SectionTitle(text: "Accounts")
+                        Spacer()
+                        LiveUsageToggle().padding(.trailing, 14)
+                    }
                     VStack(spacing: 1) {
                         ForEach(store.visibleAccounts) { AccountRow(account: $0) }
                     }.padding(.horizontal, 6)
@@ -226,7 +317,8 @@ struct MenuView: View {
                 }
                 .padding(.bottom, 6)
             }
-            .frame(maxHeight: 440)
+            // Room for 4 accounts with usage bars and the stopped sessions; scrolls on a small screen.
+            .frame(maxHeight: min(600, (NSScreen.main?.visibleFrame.height ?? 800) * 0.7))
             .fixedSize(horizontal: false, vertical: true)
             Divider()
             actions
@@ -235,6 +327,7 @@ struct MenuView: View {
         }
         .frame(width: 380)
         .task { await store.refresh(); await store.refreshLiveUsage() }
+        .background(WindowReader { store.panelWindow = $0 })
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             Task { await store.refresh() }
         }
@@ -289,5 +382,19 @@ struct MenuView: View {
         }
         .buttonStyle(.borderless).font(.system(size: 11))
         .padding(.horizontal, 12).padding(.vertical, 9)
+    }
+}
+
+
+/// Gives the NSWindow that holds a view, once it is in a window.
+struct WindowReader: NSViewRepresentable {
+    let found: (NSWindow?) -> Void
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { [weak v] in found(v?.window) }
+        return v
+    }
+    func updateNSView(_ v: NSView, context: Context) {
+        DispatchQueue.main.async { [weak v] in if let w = v?.window { found(w) } }
     }
 }

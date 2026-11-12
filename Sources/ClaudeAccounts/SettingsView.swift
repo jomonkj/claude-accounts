@@ -173,7 +173,6 @@ struct AccountsTab: View {
             }
         }
         .padding()
-        .onChange(of: store.status?.settings.liveUsageOn) { Task { await store.refreshLiveUsage() } }
     }
 }
 
