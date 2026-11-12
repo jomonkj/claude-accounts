@@ -1029,7 +1029,7 @@ def log_tail(n=200):
     return lines if n is None else lines[-n:]
 
 
-def report(app_settings=None):
+def report(app_settings=None, live_usage=None):
     """A debug report to attach to a GitHub issue, with no emails and no account IDs.
     `app_settings` ({key: value}) are settings only the app knows, such as the keyboard shortcuts."""
     st = status()
@@ -1055,8 +1055,9 @@ def report(app_settings=None):
         # Plan and limit window only: display name and org name could identify the user.
         plan = (a.get("details") or {}).get("plan") or "unknown"
         window = {"5h": "5-hour", "week": "weekly"}.get((a.get("limit") or {}).get("window"), "unknown") if a.get("limit") else "none"
+        live = (live_usage or {}).get(a["id"])
         out.append(f"  {a['id']}: {a['sessions']} sessions" + (", " + ", ".join(flags) if flags else "")
-                   + f", plan {plan}, last limit {window}")
+                   + f", plan {plan}, last limit {window}" + (f", live usage {live}" if live else ""))
     if not st["accounts"]:
         out.append("  none")
     out += ["", f"Paused sessions: {len(st['paused'])}", "", "Last log lines:"]
@@ -1633,14 +1634,20 @@ def main(argv):
         s[args[0]] = v in ("1", "true", "on", "yes") if isinstance(DEFAULTS[args[0]], bool) else int(v)
         save_settings(s); out = {"ok": True}
     elif cmd == "report":
-        app = {}
+        app, live = {}, {}
         for i, a in enumerate(args):
+            value = args[i + 1] if i + 1 < len(args) else ""
             if a == "--app-setting":
-                m = re.fullmatch(r"(\w+)=(\w+)", args[i + 1] if i + 1 < len(args) else "")
+                m = re.fullmatch(r"(\w+)=(\w+)", value)
                 if not m:
-                    raise Fail("Usage: report [--app-setting <key>=<value>]...")
+                    raise Fail("Usage: report [--app-setting <key>=<value>]... [--live-usage <account>=<state>]...")
                 app[m[1]] = m[2]
-        sys.stdout.write(report(app)); return 0
+            elif a == "--live-usage":  # from the app: ok or an error type, never a number or a cookie
+                m = re.fullmatch(r"([0-9A-Za-z-]+)=(ok|[a-z]+(?:-\d{3})?)", value)
+                if not m:
+                    raise Fail("Usage: report [--app-setting <key>=<value>]... [--live-usage <account>=<state>]...")
+                live[m[1]] = m[2]
+        sys.stdout.write(report(app, live)); return 0
     elif cmd == "update-check":
         out = update_check(args[0] if args else "0.0.0")
     elif cmd == "update-install":
