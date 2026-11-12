@@ -75,6 +75,15 @@ struct GeneralTab: View {
                          key: "showNameInMenuBar", value: \.showNameInMenuBar)
             EngineToggle(title: "Save logins automatically", help: "Every 5 minutes, save the login Claude uses now.",
                          key: "autoSaveLogins", value: \.autoSaveLogins)
+            if store.status?.settings.liveUsageOn == true {
+                Toggle(isOn: Binding(get: { store.usageWarningOn }, set: { store.setUsageWarning($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Warn at 90% of the 5-hour limit")
+                        Text("A notification names your account with the most free capacity, with a Switch button. Once for each 5-hour window.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
             Section("Keyboard shortcuts") {
                 ShortcutToggle(key: .openPanel, title: "Open the panel")
                 ShortcutToggle(key: .nextAccount, title: "Switch to the next account")
@@ -110,6 +119,7 @@ struct GeneralTab: View {
 
 struct AccountsTab: View {
     @EnvironmentObject var store: Store
+    var liveOn: Bool { store.status?.settings.liveUsageOn == true }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Table(of: Account.self) {
@@ -136,9 +146,16 @@ struct AccountsTab: View {
                 }.width(min: 80, ideal: 90)
                 TableColumn("Sessions") { a in Text("\(a.sessions)").monospacedDigit() }.width(55)
                 TableColumn("Last switch") { a in Text(a.switchedText).lineLimit(1) }.width(min: 70, ideal: 80)
-                TableColumn("Last limit") { a in
-                    Text(a.lastLimitText()).lineLimit(1).foregroundStyle(a.limit == nil ? .secondary : .primary)
-                        .help(a.limit.map { "Resets \($0.resets.isEmpty ? "at an unknown time" : $0.resets)" } ?? "No usage limit in the last 8 days")
+                // While live usage is on, this column shows it (it has the limits and their resets).
+                TableColumn(liveOn ? "Usage" : "Last limit") { a in
+                    if liveOn, let state = store.status?.liveState(for: a.id, cache: store.liveCache) {
+                        SettingsUsageCell(state: state)
+                    } else if liveOn {
+                        Text("—").foregroundStyle(.secondary).help("No usage for this account: it has no saved login.")
+                    } else {
+                        Text(a.lastLimitText()).lineLimit(1).foregroundStyle(a.limit == nil ? .secondary : .primary)
+                            .help(a.limit.map { "Resets \($0.resets.isEmpty ? "at an unknown time" : $0.resets)" } ?? "No usage limit in the last 8 days")
+                    }
                 }.width(min: 110, ideal: 140)
                 TableColumn("Login") { a in
                     Text(a.savedLogin ? (a.current ? "Active" : "Saved") : "—")
@@ -321,6 +338,27 @@ struct UninstallSection: View {
                 Spacer()
                 Button("Uninstall…") { store.uninstall() }  // the engine refuses while a switch runs
             }
+        }
+    }
+}
+
+/// Live usage in the Settings table: small 5h and Week bars; every limit, reset and the read
+/// time in the help text.
+struct SettingsUsageCell: View {
+    let state: LiveRowState
+
+    var body: some View {
+        switch state {
+        case .bars(let bars, let lastRead, let reason):
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(bars.prefix(2), id: \.label) { UsageBarView(bar: $0) }
+            }
+            .opacity(lastRead == nil ? 1 : 0.6)
+            .help((bars.map { b in "\(b.label): \(b.text)" + (b.resetText.map { ", resets \($0)" } ?? "") }
+                   + [lastRead.map { "\($0) (\(reason ?? ""))" } ?? "Live from claude.ai"]).joined(separator: "\n"))
+        case .unavailable(let reason):
+            Label("Unavailable", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.secondary)
+                .lineLimit(1).help(reason)
         }
     }
 }

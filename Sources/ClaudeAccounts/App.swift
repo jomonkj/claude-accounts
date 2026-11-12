@@ -20,7 +20,7 @@ struct ClaudeAccountsApp: App {
         if let i = args.firstIndex(of: "--render-settings"), i + 2 < args.count {
             let tab = args[i + 1], path = args[i + 2]
             Task { @MainActor in
-                let store = Store(startTimer: false); await store.refresh(); await store.loadBackups()
+                let store = Store(startTimer: false); await store.refresh(); await store.loadBackups(); await store.refreshLiveUsage()
                 // The tab bar (a glass effect) does not draw offscreen in dark mode, so the PNG starts below it.
                 await renderSnapshot(SettingsView(tab: tab).environmentObject(store).padding(.top, -24), path, dark: dark); exit(0)
             }

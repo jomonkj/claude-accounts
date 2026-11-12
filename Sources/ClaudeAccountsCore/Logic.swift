@@ -195,6 +195,28 @@ public extension Status {
         return .bars(bars, lastRead: "Last read " + age, reason: LiveAccountUsage.reason(error))
     }
 
+    /// The warning when the active account reaches 90% of its 5-hour limit, or nil. It uses fresh
+    /// values only (a failed newest read can be out of date), and comes once for each 5-hour window:
+    /// `alreadyWarned` has the keys of the warnings already sent. It names the "mine" account with
+    /// a saved login and the most free capacity: under 90% of both its 5-hour and weekly limits.
+    func usageWarning(cache: [String: CachedUsage], enabled: Bool, alreadyWarned: Set<String>) -> UsageWarning? {
+        guard enabled, settings.liveUsageOn, let cur = currentAccount, let c = cache[cur.id], c.error == nil,
+              let five = c.limits.first(where: { $0.kind == "session" }), five.percent >= 90 else { return nil }
+        let key = "\(cur.id)|\(five.resetsAt.map { String(Int($0)) } ?? "unknown")"
+        guard !alreadyWarned.contains(key) else { return nil }
+        func percent(_ u: CachedUsage?, _ kind: String) -> Double? { u?.limits.first { $0.kind == kind }?.percent }
+        let free = accounts.filter { $0.owned && !$0.current && $0.savedLogin }.compactMap { a -> (Account, Double, Double)? in
+            guard let f = percent(cache[a.id], "session"), f < 90 else { return nil }
+            let w = percent(cache[a.id], "weekly_all") ?? 0
+            return w < 90 ? (a, f, w) : nil
+        }.min { ($0.1, $0.2, $0.0.title) < ($1.1, $1.2, $1.0.title) }
+        let pct = { (p: Double) in "\(Int(p.rounded()))%" }
+        let first = "\(cur.title) is at \(pct(five.percent)) of its 5-hour limit."
+        let body = free.map { a, f, w in "\(first) \(a.title) has the most free capacity: 5h \(pct(f)), week \(pct(w))." }
+            ?? "\(first) No other account of yours has free capacity now."
+        return UsageWarning(key: key, title: "5-hour limit at \(pct(five.percent))", body: body, target: free?.0.id)
+    }
+
     /// Second line of a paused session row: the reset time while it is in the future, then the account.
     func pausedSubtitle(_ p: PausedSession, now: Date = Date(), timeZone: TimeZone = .current) -> String {
         let who = account(p.account)?.shortTitle ?? String(p.account.prefix(8))

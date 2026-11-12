@@ -364,6 +364,38 @@ func main() async {
         String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
             .replacingOccurrences(of: "\"liveUsage\": true", with: "\"liveUsage\": false").utf8))
     check("no state when the setting is off", state(offStatus, A, cache) == nil)
+    print("Usage warning (90% of the 5-hour limit)")
+    let cID = "cccc3333-0000-0000-0000-000000000000"
+    func cached(_ five: Double, _ week: Double = 10, reset: Double? = 1794136800, error: String? = nil) -> CachedUsage {
+        CachedUsage(limits: [LiveLimit(kind: "session", percent: five, resetsAt: reset, label: nil),
+                             LiveLimit(kind: "weekly_all", percent: week, resetsAt: nil, label: nil)], readAt: t0, error: error)
+    }
+    // A is the active "mine" account; B is "mine" with a saved login; C is not "mine".
+    let mineAndOther = variant { $0[2]["savedLogin"] = true; $0[2]["hidden"] = false }
+    func warn(_ st: Status, _ c: [String: CachedUsage], enabled: Bool = true, warned: Set<String> = []) -> UsageWarning? {
+        st.usageWarning(cache: c, enabled: enabled, alreadyWarned: warned)
+    }
+    check("no warning at 89%", warn(mineAndOther, [A: cached(89), B: cached(5)]) == nil)
+    let w90 = warn(mineAndOther, [A: cached(90), B: cached(5, 17)])
+    check("a warning at 90%, naming the mine account with free capacity", w90?.target == B
+          && w90?.title == "5-hour limit at 90%"
+          && w90?.body == "\(s.currentAccount!.title) is at 90% of its 5-hour limit. \(s.account(B)!.title) has the most free capacity: 5h 5%, week 17%.")
+    check("never names an account that is not mine, even with more free capacity",
+          warn(mineAndOther, [A: cached(95), B: cached(40), cID: cached(0)])?.target == B)
+    check("picks the mine account with the most free 5-hour capacity",
+          warn(variant { $0[2]["owned"] = true; $0[2]["savedLogin"] = true; $0[2]["hidden"] = false }, [A: cached(95), B: cached(40), cID: cached(12)])?.target == cID)
+    let full = warn(mineAndOther, [A: cached(97), B: cached(91)])
+    check("no free mine account: the warning says so and offers no switch", full != nil && full?.target == nil
+          && full?.body == "\(s.currentAccount!.title) is at 97% of its 5-hour limit. No other account of yours has free capacity now.")
+    check("an account near its weekly limit is not free", warn(mineAndOther, [A: cached(95), B: cached(5, 92)])?.target == nil)
+    check("an account with no usage value is not offered", warn(mineAndOther, [A: cached(95)])?.target == nil)
+    check("no warning when the warning setting is off", warn(mineAndOther, [A: cached(95), B: cached(5)], enabled: false) == nil)
+    check("no warning when live usage is off", warn(offStatus, [A: cached(95), B: cached(5)]) == nil)
+    check("no warning from a stale value (the newest read failed)", warn(mineAndOther, [A: cached(95, error: "network"), B: cached(5)]) == nil)
+    check("one warning per window: the same window does not warn again",
+          warn(mineAndOther, [A: cached(96), B: cached(5)], warned: [w90!.key]) == nil)
+    check("a new window warns again", warn(mineAndOther, [A: cached(96, reset: 1794154800), B: cached(5)], warned: [w90!.key]) != nil)
+
     let demo = try? JSONDecoder().decode([String: LiveAccountUsage].self, from: Data(#"{"a":{"ok":true,"error":null,"limits":[{"kind":"session","percent":12,"resetsAt":null,"label":null}]}}"#.utf8))
     check("live usage decodes (demo renders)", demo?["a"]?.limit("session")?.percent == 12)
     let oldSettings = try! JSONDecoder().decode(EngineSettings.self, from: Data(#"{"syncOnSwitch":false,"syncConfirmed":false,"autoSaveLogins":true,"dailyBackup":true,"backupKeep":7,"showNameInMenuBar":true,"hidden":[],"order":[],"pinned":[]}"#.utf8))
