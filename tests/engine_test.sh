@@ -469,4 +469,49 @@ check "app settings must be key=value words" '! E report --app-setting "x=1 y" >
 for i in $(seq 1 300); do echo "2026-11-02 10:00:00 line $i"; done >> "$R/home/switch.log"
 check "only the last 200 log lines" '[ "$(E report | grep -c "  2026-")" = 200 ] && E report | grep -q "line 300" && ! E report | grep -q "line 100$"'
 
+echo "live usage cookies (usage-cookies)"
+# own fake Mac: A is active (live cookies in the app folder), B has a saved login, C has none
+U="$T/live"; export CLAUDE_APP_DIR="$U/app" CLAUDE_SWITCH_HOME="$U/home" HOME="$U/userhome"
+LA=aaaa1111-1111-4111-8111-aaaaaaaaaaaa; LB=bbbb2222-2222-4222-8222-bbbbbbbbbbbb; LC=cccc3333-3333-4333-8333-cccccccccccc
+mkdir -p "$U/app/claude-code-sessions/$LA/o" "$U/app/claude-code-sessions/$LB/o" "$U/app/claude-code-sessions/$LC/o" "$U/home/profiles/$LB" "$HOME"
+echo "{\"lastKnownAccountUuid\":\"$LA\"}" > "$U/app/config.json"
+echo '{"savedAt": 1, "mode": "switch"}' > "$U/home/profiles/$LB/meta.json"
+PW="test-safe-storage-pw"
+cookiedb() { # <db path> <password> <name=value>... : a Chromium v24 cookie database with v10 values
+  /usr/bin/python3 - "$@" <<'PY'
+import hashlib, sqlite3, subprocess, sys
+path, pw, pairs = sys.argv[1], sys.argv[2].encode(), sys.argv[3:]
+key = hashlib.pbkdf2_hmac("sha1", pw, b"saltysalt", 1003, 16)
+con = sqlite3.connect(path)
+con.execute("create table meta(key, value)"); con.execute("insert into meta values('version','24')")
+con.execute("create table cookies(host_key, name, encrypted_value)")
+for p in pairs:
+    name, value = p.split("=", 1)
+    plain = hashlib.sha256(b".claude.ai").digest() + value.encode()
+    enc = subprocess.run(["/usr/bin/openssl", "enc", "-aes-128-cbc", "-nosalt", "-K", key.hex(), "-iv", "20" * 16],
+                         input=plain, capture_output=True, check=True).stdout
+    con.execute("insert into cookies values('.claude.ai', ?, ?)", (name, b"v10" + enc))
+con.commit()
+PY
+}
+cookiedb "$U/app/Cookies" "$PW" sessionKey=sk-ant-SECRET-A lastActiveOrg=org-a cf_clearance=CF-SECRET-A
+cookiedb "$U/home/profiles/$LB/Cookies" "$PW" sessionKey=sk-ant-SECRET-B lastActiveOrg=org-b
+live() { echo "$PW" | E usage-cookies; }
+lv() { live | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin)['accounts'];a=d.get('$1');print($2)"; }
+check "live usage is off by default" '[ "$(E status | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)[\"settings\"][\"liveUsage\"])")" = False ]'
+check "no password on stdin is an error" '! E usage-cookies </dev/null >/dev/null && grep -q "stdin" "$T/err"'
+check "a password on the command line is refused" '! echo "$PW" | E usage-cookies "$PW" >/dev/null && ! grep -q "$PW" "$T/err"'
+check "active account: org and cookies from the live cookies" '[ "$(lv $LA "(a[\"ok\"], a[\"org\"], a[\"cookie\"])")" = "(True, '"'"'org-a'"'"', '"'"'sessionKey=sk-ant-SECRET-A; lastActiveOrg=org-a; cf_clearance=CF-SECRET-A'"'"')" ]'
+check "saved login: org and cookies from its profile" '[ "$(lv $LB "(a[\"ok\"], a[\"org\"], a[\"cookie\"])")" = "(True, '"'"'org-b'"'"', '"'"'sessionKey=sk-ant-SECRET-B; lastActiveOrg=org-b'"'"')" ]'
+check "an account without a login is left out" '[ "$(lv $LC "a")" = None ]'
+live >/dev/null
+check "no cookie or password in the log" '! grep -qE "SECRET|$PW" "$U/home/switch.log"'
+check "the log names the counts" 'tail -1 "$U/home/switch.log" | grep -q "usage-cookies: 2 ok, 0 failed"'
+check "no cookie or password in the report" '! E report | grep -qE "SECRET|$PW"'
+check "no cookie or password in a file the engine wrote" '! grep -rqE "SECRET|$PW" "$U/home" --exclude=Cookies'
+check "a wrong password gives an error, not a crash" '[ "$(echo wrong | E usage-cookies | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin)[\"accounts\"];print(sorted((a[\"ok\"], a[\"error\"], a[\"cookie\"]) for a in d.values()))")" = "[(False, '"'"'decrypt'"'"', None), (False, '"'"'decrypt'"'"', None)]" ]'
+check "the log names the error types" 'tail -1 "$U/home/switch.log" | grep -q "usage-cookies: 0 ok, 2 failed (decrypt: 2)"'
+rm -f "$U/home/profiles/$LB/Cookies"; cookiedb "$U/home/profiles/$LB/Cookies" "$PW" sessionKey=sk-ant-SECRET-B
+check "no lastActiveOrg is a login error, with no cookie" '[ "$(lv $LB "(a[\"ok\"], a[\"error\"], a[\"cookie\"])")" = "(False, '"'"'no-login'"'"', None)" ]'
+
 echo; echo "$pass passed, $fail failed"; [ "$fail" = 0 ]

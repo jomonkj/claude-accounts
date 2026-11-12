@@ -70,6 +70,10 @@ struct AccountRow: View {
                     if let line = account.detailsLine {
                         Text(line).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                     }
+                    if let live = store.status?.liveLine(for: account.id, usage: store.liveUsage) {
+                        Text(live).font(.system(size: 11, weight: .medium)).monospacedDigit()
+                            .foregroundStyle(store.liveUsage[account.id]?.ok == false ? .secondary : .primary).lineLimit(1)
+                    }
                     Text("\(account.sessions) sessions · \(account.lastUsedText)")
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                     Text(account.loginText)
@@ -230,7 +234,7 @@ struct MenuView: View {
             footer
         }
         .frame(width: 380)
-        .task { await store.refresh() }
+        .task { await store.refresh(); await store.refreshLiveUsage() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             Task { await store.refresh() }
         }

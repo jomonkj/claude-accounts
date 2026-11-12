@@ -5,6 +5,15 @@ import ClaudeAccountsCore
 
 nonisolated(unsafe) var passed = 0
 nonisolated(unsafe) var failed = 0
+/// A value that a @Sendable closure can change (for the fake network layer).
+final class Locked<T>: @unchecked Sendable {
+    private var v: T
+    private let lock = NSLock()
+    init(_ v: T) { self.v = v }
+    var value: T { lock.lock(); defer { lock.unlock() }; return v }
+    func mutate(_ f: (inout T) -> Void) { lock.lock(); f(&v); lock.unlock() }
+}
+
 func check(_ name: String, _ ok: @autoclosure () -> Bool) {
     if ok() { passed += 1; print("  ok   \(name)") } else { failed += 1; print("  FAIL \(name)") }
 }
@@ -264,6 +273,47 @@ func main() async {
     check("a time slightly in the future reads as past, not \"in 0 seconds\"", !Account.relative(1794100000.4, now: clock).hasPrefix("in "))
     check("panel details line: plan and org first, email last", labelled.account(B)!.detailsLine == "Team (5x) · Example Co · jomon@example.com")
     check("settings subtitle has name, email and short ID", b.settingsSubtitle == "Jomon · bbbb2222")
+
+    print("Live usage")
+    let echo = await engine.run(["stdin"], input: "pw-123\n")
+    check("stdin reaches the engine", echo.json["got"] as? String == "pw-123")
+    check("stdin text is not in the arguments", (try? String(contentsOf: log, encoding: .utf8))?.contains("pw-123") == false)
+    let cookiesOut = await engine.run(["usage-cookies"], input: "pw\n")
+    let cookies = (try? JSONDecoder().decode(LiveCookiesResult.self, from: Data(cookiesOut.output.utf8)))?.accounts ?? [:]
+    check("decodes the engine cookies", cookies[A]?.org == "org-a" && cookies["cccc3333-0000-0000-0000-000000000000"]?.error == "no-login")
+    let req = LiveUsageClient.request(org: "org-a", cookie: "sessionKey=FAKE-A")!
+    check("request: the usage URL of the org", req.url?.absoluteString == "https://claude.ai/api/organizations/org-a/usage")
+    check("request: the account's cookie header, no cookie store", req.value(forHTTPHeaderField: "Cookie") == "sessionKey=FAKE-A" && !req.httpShouldHandleCookies)
+    check("request: an org with odd characters stays in its path segment", LiveUsageClient.request(org: "a/../b?x", cookie: "c")?.url?.absoluteString == "https://claude.ai/api/organizations/a%2F%2E%2E%2Fb%3Fx/usage")
+    let cfg = LiveUsageClient.ephemeralConfiguration
+    check("the session stores no cookie and no cache", cfg.httpCookieStorage == nil && cfg.urlCache == nil && !cfg.httpShouldSetCookies)
+    let body = Data(#"{"five_hour":{"utilization":99},"limits":[{"kind":"session","percent":42.4,"resets_at":"2026-11-08T11:20:00.054311+00:00"},{"kind":"weekly_all","percent":16,"resets_at":"2026-11-09T15:00:00+00:00"},{"kind":"weekly_scoped","percent":29,"resets_at":null,"scope":{"model":{"display_name":"Fable"}}},{"kind":"new_kind","percent":3},{"kind":"bad"}]}"#.utf8)
+    let parsed = LiveUsageClient.parse(body, status: 200)
+    check("parse: limits, not the old top-level fields", parsed.ok && parsed.limit("session")?.percent == 42.4)
+    check("parse: reset time with 6 digits of fraction", parsed.limit("session")?.resetsAt == 1794136800)
+    check("parse: Fable label from the model scope", parsed.limit("weekly_scoped")?.label == "Fable" && parsed.limit("weekly_scoped")?.resetsAt == nil)
+    check("parse: an unknown kind is kept, an entry without percent is dropped", parsed.limit("new_kind") != nil && parsed.limit("bad") == nil)
+    check("parse: Cloudflare challenge is http-403", LiveUsageClient.parse(Data("<html>Just a moment</html>".utf8), status: 403).error == "http-403")
+    check("parse: HTML with status 200 is not-json", LiveUsageClient.parse(Data("<html>".utf8), status: 200).error == "not-json")
+    let sent = Locked<[String]>([])
+    let usage = await LiveUsageClient.fetch(cookies) { r in
+        sent.mutate { $0.append(r.value(forHTTPHeaderField: "Cookie") ?? "") }
+        if r.url!.path.contains("org-b") { throw URLError(.timedOut) }
+        return (body, HTTPURLResponse(url: r.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+    check("fetch: each account gets its own cookies", Set(sent.value) == ["sessionKey=FAKE-A; lastActiveOrg=org-a", "sessionKey=FAKE-B; lastActiveOrg=org-b"])
+    check("fetch: an account without a login sends no request", usage["cccc3333-0000-0000-0000-000000000000"]?.error == "no-login")
+    check("fetch: a network error is network", usage[B]?.error == "network" && usage[A]?.ok == true)
+    check("live usage setting decoded", s.settings.liveUsageOn)
+    check("panel line: 5-hour and weekly percent", s.liveLine(for: A, usage: usage) == "5h 42% · wk 16%")
+    check("panel line for a failed account", s.liveLine(for: B, usage: usage) == "Live usage: unavailable")
+    check("no line for an account that was not asked", s.liveLine(for: "dddd", usage: usage) == nil)
+    let offStatus = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"liveUsage\": true", with: "\"liveUsage\": false").utf8))
+    check("no line when the setting is off", offStatus.liveLine(for: A, usage: usage) == nil)
+    let oldSettings = try! JSONDecoder().decode(EngineSettings.self, from: Data(#"{"syncOnSwitch":false,"syncConfirmed":false,"autoSaveLogins":true,"dailyBackup":true,"backupKeep":7,"showNameInMenuBar":true,"hidden":[],"order":[],"pinned":[]}"#.utf8))
+    check("older status without the setting means off", oldSettings.liveUsageOn == false)
 
     try? FileManager.default.removeItem(at: log)
     print("\n\(passed) passed, \(failed) failed")
