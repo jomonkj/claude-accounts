@@ -106,13 +106,28 @@ func main() async {
     check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
     check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)
     check("switch targets: mine, saved, not current", s.switchTargets().map(\.id) == [B])
-    let note = s.notificationText(for: s.paused[0])
-    check("notification text", note.title == "Usage limit reached"
-          && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
-
-    print("Reset time")
     let ist = TimeZone(identifier: "Asia/Calcutta")!
     let resetAt = Date(timeIntervalSince1970: 1794136800)  // 2026-11-08 4:50 PM in Asia/Calcutta
+    let note = s.notificationText(for: s.paused[0], now: resetAt.addingTimeInterval(-3600), timeZone: ist)
+    check("notification text: the exact reset time", note.title == "Usage limit reached"
+          && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50 PM.")
+    check("notification names the day of a later reset",
+          s.notificationText(for: s.paused[0], now: resetAt.addingTimeInterval(-86400), timeZone: ist).body
+          == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets Sun 4:50 PM.")
+    let weekly = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"resetsAt\": 1794136800,", with: "\"resetsAt\": 1794136800, \"window\": \"week\",").utf8))
+    check("paused window decoded", weekly.paused[0].window == "week" && s.paused[0].window == nil)
+    check("notification names the window", weekly.notificationText(for: weekly.paused[0], now: resetAt, timeZone: ist).title
+          == "Weekly limit reached")
+    let noEpoch = try! JSONDecoder().decode(Status.self, from: Data(
+        String(contentsOf: fixtures.appendingPathComponent("status.json"), encoding: .utf8)
+            .replacingOccurrences(of: "\"resetsAt\": 1794136800", with: "\"resetsAt\": null").utf8))
+    check("notification without a reset epoch uses the reset text",
+          noEpoch.notificationText(for: noEpoch.paused[0], now: resetAt, timeZone: ist).body
+          == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
+
+    print("Reset time")
     check("reset time decoded", s.paused[0].resetsAt == 1794136800)
     check("reset line before the reset",
           s.resetLine(for: B, now: resetAt.addingTimeInterval(-3600), timeZone: ist) == "Limit resets 4:50 PM")
