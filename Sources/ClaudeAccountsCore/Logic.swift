@@ -176,11 +176,19 @@ public extension Status {
         return Array(autoSwitch(cache: cache, now: now).ranking.compactMap { account($0.id) }.prefix(limit))
     }
 
-    /// Title and body of the notification for a paused session.
-    func notificationText(for p: PausedSession) -> (title: String, body: String) {
+    /// Title and body of the notification for a paused session. The reset is the exact time from
+    /// the engine (for example "Resets Sun 4:50 PM."); the reset text only when that time is not known.
+    func notificationText(for p: PausedSession, now: Date = Date(), timeZone: TimeZone = .current) -> (title: String, body: String) {
         let who = account(p.account)?.title ?? String(p.account.prefix(8))
-        let reset = p.resets.isEmpty ? "" : " Resets \(p.resets)."
-        return ("Usage limit reached", "\"\(p.title)\" stopped on \(who).\(reset)")
+        let reset: String
+        if let at = p.resetsAt {
+            reset = at > now.timeIntervalSince1970
+                ? " Resets " + Self.resetTime(Date(timeIntervalSince1970: at), now: now, timeZone: timeZone) + "." : ""
+        } else {
+            reset = p.resets.isEmpty ? "" : " Resets \(p.resets)."
+        }
+        let title = switch p.window { case "5h": "5-hour limit reached"; case "week": "Weekly limit reached"; default: "Usage limit reached" }
+        return (title, "\"\(p.title)\" stopped on \(who).\(reset)")
     }
 
     /// Grey line under an account that hit its limit, for example "Weekly limit resets Mon 8:30 PM".

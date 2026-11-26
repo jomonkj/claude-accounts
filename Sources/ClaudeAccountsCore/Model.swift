@@ -119,8 +119,11 @@ public struct PausedSession: Identifiable, Decodable, Equatable, Sendable {
     public let cwd: String
     public let message: String
     public let resets: String
-    /// When the limit resets (epoch seconds), or nil when the engine could not read the reset text.
+    /// When the limit resets (epoch seconds), from the structured limit fields of the error, else
+    /// from the reset text; nil when neither gives it.
     public let resetsAt: Double?
+    /// "5h", "week", or nil when not known (an older engine sends no window).
+    public let window: String?
     public let stoppedAt: String
 }
 

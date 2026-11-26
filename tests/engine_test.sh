@@ -162,6 +162,45 @@ check "unreadable text is null" '[ "$(resets_at "resets soon" 2026-11-07T12:00:0
 check "unknown time zone is null" '[ "$(resets_at "resets 8pm (Mars/Base)" 2026-11-07T12:00:00Z)" = None ]'
 check "no reset text is null" '[ "$(resets_at "try again later" 2026-11-07T12:00:00Z)" = None ]'
 
+echo "replay of the real limit errors (tests/Fixtures/limit-hits.json, private text removed)"
+# Each real limit error ends one session; the non-limit errors and normal endings end others.
+/usr/bin/python3 - "$ROOT/tests/Fixtures/limit-hits.json" "$A/claude-code-sessions/BBBBBBBB-2/org2" "$HOME/.claude/projects/rp" <<'EOF'
+import json, os, sys
+fx, sess, proj = json.load(open(sys.argv[1])), sys.argv[2], sys.argv[3]
+os.makedirs(proj, exist_ok=True)
+def session(sid, lines):
+    json.dump({"sessionId": sid, "cliSessionId": "cli-" + sid, "title": sid}, open(f"{sess}/{sid}.json", "w"))
+    with open(f"{proj}/cli-{sid}.jsonl", "w") as f:
+        f.writelines(json.dumps(l) + "\n" for l in lines)
+user = {"type": "user", "timestamp": "2026-11-20T10:00:00Z", "message": {"role": "user", "content": "go on"}}
+answer = {"type": "assistant", "timestamp": "2026-11-20T10:00:05Z",
+          "message": {"role": "assistant", "content": [{"type": "text", "text": "Done. I raised the rate limit in the config."}]}}
+for i, h in enumerate(fx["hits"]):
+    session(f"local_rp{i}", [user, h["entry"]])
+for i, e in enumerate(fx["notLimit"]):
+    session(f"local_rn{i}", [user, e])
+session("local_rn_answer", [user, answer])
+session("local_rn_user", [answer, user])
+session("local_rn_resumed", [user, fx["hits"][0]["entry"], user, answer])
+EOF
+replay() { E paused | /usr/bin/python3 -c "
+import json, sys
+fx = json.load(open('$ROOT/tests/Fixtures/limit-hits.json'))
+got = {p['id']: p for p in json.load(sys.stdin)}
+$1"; }
+N=$(/usr/bin/python3 -c "import json;print(len(json.load(open('$ROOT/tests/Fixtures/limit-hits.json'))['hits']))")
+check "paused finds every real limit error ($N of them)" \
+  '[ "$N" -gt 0 ] && [ "$(replay "print(sum(\"local_rp%d\" % i in got for i in range(len(fx[\"hits\"]))))")" = "$N" ]'
+check "...each with the window and the exact reset epoch" \
+  '[ "$(replay "print([i for i, h in enumerate(fx[\"hits\"]) if (got.get(\"local_rp%d\" % i) or {}).get(\"window\") != h[\"window\"] or (got.get(\"local_rp%d\" % i) or {}).get(\"resetsAt\") != h[\"resetsAt\"]])")" = "[]" ]'
+check "no hit in transcripts with no limit error at the end" '[ "$(replay "print(sorted(k for k in got if k.startswith(\"local_rn\")))")" = "[]" ]'
+check "status lists the same paused sessions" '[ "$(E status | /usr/bin/python3 -c "import json,sys;print(sum(p[\"id\"].startswith(\"local_rp\") for p in json.load(sys.stdin)[\"paused\"]))")" = "$N" ]'
+rm -rf "$HOME/.claude/projects/rp" "$A"/claude-code-sessions/BBBBBBBB-2/org2/local_r[pn]*.json
+
+echo "text fallback: an entry with no structured fields"
+check "window from the text" '[ "$(resets_at "resets 8pm (Asia/Calcutta)" 2026-11-07T12:00:00Z >/dev/null; E paused | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)[0][\"window\"])")" = 5h ]'
+check "reset epoch from the text" '[ "$(resets_at "resets 8pm (Asia/Calcutta)" 2026-11-07T12:00:00Z)" = "$(epoch 2026-11-07T14:30:00Z)" ]'
+
 echo "last limit hit for each account"
 mv "$HOME/.claude/projects/p/cli-p1.jsonl" "$T/cli-p1.keep"
 Q="$HOME/.claude/projects/q"; mkdir -p "$Q"
