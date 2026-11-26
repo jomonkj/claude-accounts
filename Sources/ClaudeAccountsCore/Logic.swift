@@ -154,14 +154,19 @@ public extension Status {
     }
 
     /// The auto-switch decision for this status (AutoSwitch.decide): the ranking of the next accounts.
-    func autoSwitch(cache: [String: CachedUsage], now: Date = Date(), timeZone: TimeZone = .current) -> AutoSwitchDecision {
-        AutoSwitch.decide(AutoSwitchInput(accounts: accounts, usage: cache, now: now.timeIntervalSince1970, timeZone: timeZone))
+    /// `history` is the app's usage history, for the forecast.
+    func autoSwitch(cache: [String: CachedUsage], history: [UsageReading] = [], now: Date = Date(),
+                    timeZone: TimeZone = .current) -> AutoSwitchDecision {
+        var input = AutoSwitchInput(accounts: accounts, usage: cache, now: now.timeIntervalSince1970, timeZone: timeZone)
+        input.history = history
+        return AutoSwitch.decide(input)
     }
 
     /// The panel line "Next: B · resets Thu, 40% left", or nil when live usage is off.
-    func nextLine(cache: [String: CachedUsage], now: Date = Date(), timeZone: TimeZone = .current) -> String? {
+    func nextLine(cache: [String: CachedUsage], history: [UsageReading] = [], now: Date = Date(),
+                  timeZone: TimeZone = .current) -> String? {
         guard settings.liveUsageOn else { return nil }
-        guard let next = autoSwitch(cache: cache, now: now, timeZone: timeZone).next else {
+        guard let next = autoSwitch(cache: cache, history: history, now: now, timeZone: timeZone).next else {
             return "Next: none · no other account has quota left"
         }
         return "Next: \(account(next.id)?.shortTitle ?? String(next.id.prefix(8))) · \(next.reason)"
@@ -169,11 +174,12 @@ public extension Status {
 
     /// Accounts a notification can offer to switch to, best first. With live usage on, the
     /// auto-switch ranking; without live usage (no usage to rank), mine, with a saved login, not current.
-    func switchTargets(cache: [String: CachedUsage] = [:], now: Date = Date(), limit: Int = 3) -> [Account] {
+    func switchTargets(cache: [String: CachedUsage] = [:], history: [UsageReading] = [], now: Date = Date(),
+                       limit: Int = 3) -> [Account] {
         guard settings.liveUsageOn else {
             return Array(accounts.filter { !$0.current && $0.savedLogin && $0.owned }.prefix(limit))
         }
-        return Array(autoSwitch(cache: cache, now: now).ranking.compactMap { account($0.id) }.prefix(limit))
+        return Array(autoSwitch(cache: cache, history: history, now: now).ranking.compactMap { account($0.id) }.prefix(limit))
     }
 
     /// Title and body of the notification for a paused session.
@@ -220,13 +226,13 @@ public extension Status {
     /// values only (a failed newest read can be out of date), and comes once for each 5-hour window:
     /// `alreadyWarned` has the keys of the warnings already sent. It names the next account of the
     /// auto-switch ranking, with the reason.
-    func usageWarning(cache: [String: CachedUsage], enabled: Bool, alreadyWarned: Set<String>,
+    func usageWarning(cache: [String: CachedUsage], history: [UsageReading] = [], enabled: Bool, alreadyWarned: Set<String>,
                       now: Date = Date(), timeZone: TimeZone = .current) -> UsageWarning? {
         guard enabled, settings.liveUsageOn, let cur = currentAccount, let c = cache[cur.id], c.error == nil,
               let five = c.limits.first(where: { $0.kind == "session" }), five.percent >= 90 else { return nil }
         let key = "\(cur.id)|\(five.resetsAt.map { String(Int($0)) } ?? "unknown")"
         guard !alreadyWarned.contains(key) else { return nil }
-        let next = autoSwitch(cache: cache, now: now, timeZone: timeZone).next
+        let next = autoSwitch(cache: cache, history: history, now: now, timeZone: timeZone).next
         let pct = "\(Int(five.percent.rounded()))%"
         let first = "\(cur.title) is at \(pct) of its 5-hour limit."
         let body = next.map { "\(first) Next: \(account($0.id)?.title ?? $0.id) · \($0.reason)." }

@@ -362,10 +362,10 @@ struct MenuView: View {
                         Spacer()
                         LiveUsageToggle().padding(.trailing, 14)
                     }
-                    if let next = store.status?.nextLine(cache: store.liveCache) {
-                        Text(next).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                    if let next = store.status?.nextLine(cache: store.liveCache, history: store.usageHistory) {
+                        Text(next).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(2).truncationMode(.tail)
                             .padding(.horizontal, 16).padding(.bottom, 2)
-                            .help("The account a switch at the limit goes to: the soonest weekly reset first, then more weekly quota left.")
+                            .help("The account a switch at the limit goes to: the soonest weekly reset first, then more weekly quota left. With 7 days of usage history, an account moves down when you will not use its quota before its reset anyway.")
                     }
                     VStack(spacing: 1) {
                         ForEach(store.visibleAccounts) { AccountRow(account: $0) }
