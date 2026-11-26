@@ -9,9 +9,21 @@ public struct AutoSwitchInput: Sendable {
     public var now: Double
     /// For the reason text ("resets Thu").
     public var timeZone: TimeZone
+    /// Sessions stopped on a usage limit (engine `paused`).
+    public var paused: [PausedSession] = []
+    /// Recent Code tab sessions, to tell which are still running (SessionActivity.isRunning).
+    public var running: [SessionActivity] = []
+    /// Past auto-switch decisions (AutoSwitchLog), for the loop limit.
+    public var history: [AutoSwitchRecord] = []
 
     public init(accounts: [Account], usage: [String: CachedUsage], now: Double, timeZone: TimeZone = .current) {
         self.accounts = accounts; self.usage = usage; self.now = now; self.timeZone = timeZone
+    }
+
+    public init(accounts: [Account], usage: [String: CachedUsage], now: Double, timeZone: TimeZone = .current,
+                paused: [PausedSession], running: [SessionActivity] = [], history: [AutoSwitchRecord] = []) {
+        self.init(accounts: accounts, usage: usage, now: now, timeZone: timeZone)
+        self.paused = paused; self.running = running; self.history = history
     }
 }
 
@@ -29,6 +41,8 @@ public struct RankedAccount: Equatable, Sendable {
 public struct AutoSwitchDecision: Equatable, Sendable {
     /// The allowed accounts, best first.
     public let ranking: [RankedAccount]
+    /// What to do now (AutoSwitch.action).
+    public var action: AutoSwitchAction = .none
     /// The best account, or nil when no account is allowed.
     public var next: RankedAccount? { ranking.first }
 }
@@ -51,7 +65,9 @@ public enum AutoSwitch {
         }
         // Rule 1: soonest weekly reset, then more weekly quota left. The ID makes the order total.
         func key(_ r: RankedAccount) -> (Double, Double, String) { (r.weeklyResetsAt ?? .infinity, r.weeklyPercent, r.id) }
-        return AutoSwitchDecision(ranking: ranked.sorted { key($0) < key($1) })
+        var decision = AutoSwitchDecision(ranking: ranked.sorted { key($0) < key($1) })
+        decision.action = action(input, ranking: decision.ranking)
+        return decision
     }
 
     /// "resets Thu, 40% left", "resets today, 88% left", or "40% left" when the reset is not known.

@@ -143,6 +143,43 @@ struct LiveUsageToggle: View {
     }
 }
 
+/// The auto-switch on/off switch next to the live usage switch, with "Dry run" while dry run is on.
+/// The same settings as in Settings → General. Shown only while live usage is on: auto-switch needs it.
+struct AutoSwitchToggle: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        let on = store.autoSwitchOn, dry = store.autoSwitchDryRun
+        HStack(spacing: 4) {
+            Button {
+                store.setAutoSwitch(!on)
+            } label: {
+                Label("Auto", systemImage: on ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath")
+                    .font(.system(size: 10, weight: .semibold))
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Capsule().fill(on ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.07)))
+                    .foregroundStyle(on ? Color.accentColor : Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(on ? "Auto-switch at limit is on. Click to turn it off."
+                     : "Auto-switch at limit: when the account hits its limit, go to the next account and resume the stopped sessions.")
+            if on {
+                Button {
+                    store.setAutoSwitchDryRun(!dry)
+                } label: {
+                    Text(dry ? "Dry run" : "Live")
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Dry run: the app writes what it would do to the switch log and does not switch. This version never switches.")
+            }
+        }
+    }
+}
+
 extension Optional where Wrapped == LiveRowState {
     var hasBars: Bool { if case .bars = self { true } else { false } }
 }
@@ -360,6 +397,7 @@ struct MenuView: View {
                     HStack(alignment: .lastTextBaseline) {
                         SectionTitle(text: "Accounts")
                         Spacer()
+                        if store.status?.settings.liveUsageOn == true { AutoSwitchToggle() }
                         LiveUsageToggle().padding(.trailing, 14)
                     }
                     if let next = store.status?.nextLine(cache: store.liveCache) {

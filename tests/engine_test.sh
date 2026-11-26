@@ -275,6 +275,24 @@ check "an unknown account in the log is ignored" '[ "$(paused_acct)" = "['"'"'BB
 cp "$T/log.keep" "$CLAUDE_SWITCH_HOME/switch.log"
 rm -rf "$Q" "$A"/claude-code-sessions/*/org; mv "$T/cli-p1.keep" "$HOME/.claude/projects/p/cli-p1.jsonl"
 
+echo "sessions: paused and running, for auto-switch"
+R="$A/claude-code-sessions/AAAAAAAA-1/orgr"; mkdir -p "$R"
+NOW_MS=$(/usr/bin/python3 -c "import time;print(int(time.time()*1000))")
+echo '{"sessionId":"local_run","cliSessionId":"cli-run","title":"r","lastActivityAt":'"$NOW_MS"',"lastTurnEdgeAt":'"$((NOW_MS-5000))"',"completedTurns":4}' > "$R/local_run.json"
+echo '{"sessionId":"local_arch","cliSessionId":"cli-arch","isArchived":true,"lastActivityAt":'"$NOW_MS"'}' > "$R/local_arch.json"
+echo '{"sessionId":"local_notime","cliSessionId":"cli-notime"}' > "$R/local_notime.json"
+sx() { E sessions | /usr/bin/python3 -c "import json,sys;d=json.load(sys.stdin);$1"; }
+check "sessions has the same paused sessions as paused" '[ "$(sx "print(d[\"paused\"])")" = "$(E paused | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin))")" ]'
+check "running: activity and turn edge in epoch seconds, and the completed turns" \
+  '[ "$(sx "r=[x for x in d[\"running\"] if x[\"id\"]==\"local_run\"][0];print(r[\"lastActivityAt\"]*1000=='"$NOW_MS"', r[\"lastTurnEdgeAt\"]*1000=='"$((NOW_MS-5000))"', r[\"completedTurns\"])")" = "True True 4" ]'
+check "running: archived sessions and sessions with no activity time are left out" '[ "$(sx "print(sorted(x[\"id\"] for x in d[\"running\"]))")" = "['"'"'local_run'"'"']" ]'
+rm -rf "$R"
+echo "note: auto-switch lines in the switch log"
+check "note writes an autoswitch line" 'E note "autoswitch (dry run): switch to AAAAAAAA-1 (40% left), resume 1 session" >/dev/null && tail -1 "$CLAUDE_SWITCH_HOME/switch.log" | grep -q " autoswitch (dry run): switch to AAAAAAAA-1 (40% left), resume 1 session$"'
+check "note refuses other text (it could fake a switch)" '! E note "switched to AAAAAAAA-1" >/dev/null && ! tail -1 "$CLAUDE_SWITCH_HOME/switch.log" | grep -q " switched to AAAAAAAA-1$"'
+check "note refuses more than one line" '! E note "autoswitch x
+2026-01-01 00:00:00 switched to AAAAAAAA-1" >/dev/null'
+
 echo "version and layout guard"
 E label BBBBBBBB-2 "" >/dev/null
 login_as BBBBBBBB-2 cookieB; E add >/dev/null; login_as AAAAAAAA-1 cookieA

@@ -527,6 +527,127 @@ func main() async {
     check("allowed: a model limit at 100% is ignored", picked(acct(P), weekly(week: 20, weekResets: t0 + day,
           extra: [LiveLimit(kind: "weekly_scoped", percent: 100, resetsAt: t0 + 0.5 * day, label: "Fable")])) == [P, Q])
 
+    print("Auto-switch actions")
+    let cur = acct(P, current: true)
+    /// A session stopped on a usage limit, as the engine `paused` command reports it.
+    func stop(_ id: String, account: String = P, at: Double, window: String? = "5h", resetsAt: Double? = nil) -> PausedSession {
+        let iso = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: at))
+        let resets = resetsAt.map { "\($0)" } ?? "null", win = window.map { "\"\($0)\"" } ?? "null"
+        return try! JSONDecoder().decode(PausedSession.self, from: Data(("{\"id\": \"\(id)\", \"title\": \"t\", \"account\": \"\(account)\", "
+            + "\"cwd\": \"\", \"message\": \"m\", \"resets\": \"\", \"resetsAt\": \(resets), \"window\": \(win), \"stoppedAt\": \"\(iso)\"}").utf8))
+    }
+    func act(_ accounts: [Account], _ u: [String: CachedUsage], paused: [PausedSession] = [], running: [SessionActivity] = [],
+             history: [AutoSwitchRecord] = [], now: Double = t0) -> AutoSwitchAction {
+        AutoSwitch.decide(AutoSwitchInput(accounts: accounts, usage: u, now: now, timeZone: rankTZ,
+                                          paused: paused, running: running, history: history)).action
+    }
+    let freeQ = weekly(week: 40, weekResets: t0 + 4 * day)
+    check("action none: no limit stop and the current account below its limits",
+          act([cur, acct(Q)], [P: weekly(five: 50, week: 50, weekResets: t0 + day), Q: freeQ]) == AutoSwitchAction.none)
+    check("action none: a limit stop of another account",
+          act([cur, acct(Q)], [Q: freeQ], paused: [stop("s1", account: R, at: t0 - 60)]) == AutoSwitchAction.none)
+    check("action switch: a limit stop of the current account goes to the next account and resumes the stopped sessions",
+          act([cur, acct(Q)], [Q: freeQ], paused: [stop("s1", at: t0 - 60), stop("s2", at: t0 - 30)])
+            == .switch(to: Q, resume: ["s1", "s2"], reason: "resets Thu, 60% left"))
+    check("action switch: live usage of the current account at 100% with no limit stop",
+          act([cur, acct(Q)], [P: weekly(five: 100, week: 50, weekResets: t0 + day), Q: freeQ])
+            == .switch(to: Q, resume: [], reason: "resets Thu, 60% left"))
+    check("action none: a limit stop whose reset has passed",
+          act([cur, acct(Q)], [Q: freeQ], paused: [stop("s1", at: t0 - 7200, resetsAt: t0 - 60)]) == AutoSwitchAction.none)
+    check("action none: a limit stop from before the last switch to the current account", act([try! JSONDecoder().decode(Account.self, from: Data(
+          "{\"id\": \"\(P)\", \"name\": \"\", \"sessions\": 1, \"lastUsed\": 0, \"savedLogin\": true, \"savedAt\": 0, \"savedMode\": \"switch\", \"current\": true, \"hidden\": false, \"owned\": true, \"switchedAt\": \(t0 - 30)}".utf8)),
+          acct(Q)], [Q: freeQ], paused: [stop("s1", at: t0 - 60)]) == AutoSwitchAction.none)
+
+    // Running rule: activity in the last 2 minutes, or a turn still open (activity after the last turn edge) in the last 30 minutes.
+    func session(_ id: String, activity: Double, edge: Double?) -> SessionActivity {
+        SessionActivity(id: id, lastActivityAt: activity, lastTurnEdgeAt: edge, completedTurns: 3)
+    }
+    check("running: activity 1 minute ago", session("r", activity: t0 - 60, edge: t0 - 60).isRunning(now: t0))
+    check("running: a turn still open, last activity 10 minutes ago (a long tool call)", session("r", activity: t0 - 600, edge: t0 - 900).isRunning(now: t0))
+    check("not running: a finished turn 3 minutes ago", !session("r", activity: t0 - 180, edge: t0 - 180).isRunning(now: t0))
+    check("not running: an open turn with no activity for 30 minutes", !session("r", activity: t0 - 1801, edge: t0 - 2000).isRunning(now: t0))
+    let busy = session("other", activity: t0 - 10, edge: t0 - 100)
+    check("action wait: another session of the account is running, until 3 minutes after the first limit stop",
+          act([cur, acct(Q)], [Q: freeQ], paused: [stop("s1", at: t0 - 60), stop("s2", at: t0 - 30)], running: [busy]) == .wait(until: t0 + 120))
+    check("action switch: 3 minutes after the first limit stop, running sessions no longer wait",
+          act([cur, acct(Q)], [Q: freeQ], paused: [stop("s1", at: t0 - 180)], running: [busy]) == .switch(to: Q, resume: ["s1"], reason: "resets Thu, 60% left"))
+    check("action switch: the stopped session itself does not count as running",
+          act([cur, acct(Q)], [Q: freeQ], paused: [stop("s1", at: t0 - 10)], running: [session("s1", activity: t0 - 10, edge: t0 - 100)])
+            == .switch(to: Q, resume: ["s1"], reason: "resets Thu, 60% left"))
+    let weekFullQ = weekly(five: 20, week: 100, weekResets: t0 + 2 * day), fiveFullQ = weekly(five: 100, week: 30, weekResets: t0 + 2 * day)
+    check("action waitForReset: every account at its weekly limit waits for the soonest weekly reset",
+          act([cur, acct(Q)], [Q: weekFullQ], paused: [stop("s1", at: t0 - 60, window: "week", resetsAt: t0 + day)]) == .waitForReset(account: P, at: t0 + day))
+    check("action waitForReset: the soonest reset can be another account",
+          act([cur, acct(Q)], [P: weekly(five: 10, week: 100, weekResets: t0 + 3 * day), Q: weekFullQ]) == .waitForReset(account: Q, at: t0 + 2 * day))
+    check("action waitForReset: the current account at its weekly limit and the other at its 5-hour limit waits for that 5-hour reset",
+          act([cur, acct(Q)], [Q: fiveFullQ], paused: [stop("s1", at: t0 - 60, window: "week", resetsAt: t0 + day)]) == .waitForReset(account: Q, at: t0 + 3600))
+    check("action waitForReset: the only account, reset not known",
+          act([cur], [:], paused: [stop("s1", at: t0 - 60, window: "week")]) == .waitForReset(account: P, at: nil))
+    check("action leaveToDesktop: every account at its 5-hour limit",
+          act([cur, acct(Q)], [Q: fiveFullQ], paused: [stop("s1", at: t0 - 60, resetsAt: t0 + 3000)]) == .leaveToDesktop)
+    check("action leaveToDesktop: the current account at its 5-hour limit and no other account allowed",
+          act([cur, acct(Q, savedLogin: false)], [Q: freeQ], paused: [stop("s1", at: t0 - 60)]) == .leaveToDesktop)
+    func switched(_ at: Double) -> AutoSwitchRecord { AutoSwitchRecord(at: at, action: .switch(to: Q, resume: [], reason: "")) }
+    let limitStop = [stop("s1", at: t0 - 60)]
+    check("action stopped: 3 auto-switches in the last 30 minutes",
+          act([cur, acct(Q)], [Q: freeQ], paused: limitStop, history: [switched(t0 - 1700), switched(t0 - 900), switched(t0 - 100)])
+            == .stopped(reason: "3 auto-switches in 30 minutes"))
+    check("action switch: the oldest of 3 auto-switches is 30 minutes ago",
+          act([cur, acct(Q)], [Q: freeQ], paused: limitStop, history: [switched(t0 - 1800), switched(t0 - 900), switched(t0 - 100)])
+            == .switch(to: Q, resume: ["s1"], reason: "resets Thu, 60% left"))
+    check("action switch: other past decisions do not count",
+          act([cur, acct(Q)], [Q: freeQ], paused: limitStop, history: [switched(t0 - 900), switched(t0 - 100),
+               AutoSwitchRecord(at: t0 - 50, action: .leaveToDesktop), AutoSwitchRecord(at: t0 - 40, action: .wait(until: t0))])
+            == .switch(to: Q, resume: ["s1"], reason: "resets Thu, 60% left"))
+    // Property test: random runs where every switch is done at once, so the history holds every switch.
+    var loopRng = SplitMix64(seed: 64)
+    var tooMany = 0
+    for _ in 0..<200 {
+        var now = t0, history: [AutoSwitchRecord] = []
+        let accounts = [acct(P, current: true), acct(Q), acct(R)]
+        for step in 0..<60 {
+            now += Double(Int.random(in: 0...600, using: &loopRng))
+            let paused = Bool.random(using: &loopRng) ? [stop("s\(step)", at: now - Double(Int.random(in: 0...400, using: &loopRng)))] : []
+            let u = [P: weekly(five: [50, 100][Int.random(in: 0...1, using: &loopRng)], week: 50, weekResets: now + day), Q: freeQ, R: freeQ]
+            let running = Bool.random(using: &loopRng) ? [session("x", activity: now - 5, edge: now - 50)] : []
+            let a = act(accounts, u, paused: paused, running: running, history: history, now: now)
+            if case .switch = a { history.append(AutoSwitchRecord(at: now, action: a)) }
+        }
+        let times = history.map(\.at)
+        for (i, t) in times.enumerated() where i >= 3 && t - times[i - 3] < 1800 { tooMany += 1 }
+    }
+    check("property (200 runs): never more than 3 switches in any 30 minutes", tooMany == 0)
+    let sessionsJSON = #"{"paused": [{"id": "s1", "title": "t", "account": "a", "cwd": "", "message": "m", "resets": "", "resetsAt": 1794136800, "window": "5h", "stoppedAt": "2026-11-08T10:19:00.123Z"}], "running": [{"id": "r1", "lastActivityAt": 1794133190.5, "lastTurnEdgeAt": null, "completedTurns": null}]}"#
+    let sessions = try? JSONDecoder().decode(EngineSessions.self, from: Data(sessionsJSON.utf8))
+    check("engine sessions output decodes", sessions?.running == [SessionActivity(id: "r1", lastActivityAt: 1794133190.5, lastTurnEdgeAt: nil, completedTurns: nil)]
+          && sessions?.paused.first?.stoppedAtTime == 1794133140.123)
+
+    print("Auto-switch log (dry run)")
+    // t0 is Sunday 15:50 in Asia/Calcutta. Lines name account IDs, as the engine log does, so the debug report hides them.
+    func line(_ a: AutoSwitchAction) -> String? { AutoSwitchLog.line(a, timeZone: rankTZ) }
+    check("log line: none writes nothing", line(.none) == nil)
+    check("log line: wait", line(.wait(until: t0 + 120)) == "autoswitch (dry run): wait for other running sessions until Sun 15:52")
+    check("log line: switch", line(.switch(to: Q, resume: ["s1", "s2"], reason: "resets Thu, 60% left"))
+          == "autoswitch (dry run): switch to \(Q) (resets Thu, 60% left), resume 2 sessions")
+    check("log line: waitForReset", line(.waitForReset(account: Q, at: t0 + day + 600)) == "autoswitch (dry run): every account at its limit, wait for \(Q) to reset Mon 16:00")
+    check("log line: waitForReset, reset not known", line(.waitForReset(account: Q, at: nil)) == "autoswitch (dry run): every account at its limit, wait for \(Q) to reset (time not known)")
+    check("log line: leaveToDesktop", line(.leaveToDesktop) == "autoswitch (dry run): every account at its 5-hour limit, Claude waits for the reset")
+    check("log line: stopped", line(.stopped(reason: "3 auto-switches in 30 minutes")) == "autoswitch (dry run): stopped, 3 auto-switches in 30 minutes")
+    let sw = AutoSwitchAction.switch(to: Q, resume: ["s1"], reason: "r")
+    let r1 = AutoSwitchLog.record([], sw, now: t0, timeZone: rankTZ)
+    check("record: a new action is stored and logged", r1.history == [AutoSwitchRecord(at: t0, action: sw)] && r1.line?.hasPrefix("autoswitch (dry run): switch") == true)
+    let r2 = AutoSwitchLog.record(r1.history, sw, now: t0 + 300, timeZone: rankTZ)
+    check("record: the same action again is not stored or logged", r2.history == r1.history && r2.line == nil)
+    let r3 = AutoSwitchLog.record(r2.history, .none, now: t0 + 600, timeZone: rankTZ)
+    check("record: back to none is stored, not logged", r3.history.last == AutoSwitchRecord(at: t0 + 600, action: .none) && r3.line == nil)
+    check("record: none with no history stores nothing", AutoSwitchLog.record([], .none, now: t0, timeZone: rankTZ).history.isEmpty)
+    check("record: the same action after none is logged again", AutoSwitchLog.record(r3.history, sw, now: t0 + 900, timeZone: rankTZ).line != nil)
+    let longAgo = [AutoSwitchRecord(at: t0 - day - 1, action: sw), AutoSwitchRecord(at: t0 - day, action: .leaveToDesktop)]
+    check("record: entries older than a day are removed, the newest is kept",
+          AutoSwitchLog.record(longAgo, .leaveToDesktop, now: t0 + day, timeZone: rankTZ).history == [longAgo[1]])
+    check("record: the stored form reads back", AutoSwitchLog.decode(AutoSwitchLog.encode(r3.history)) == r3.history)
+    check("record: an unreadable stored form is an empty history", AutoSwitchLog.decode(Data("x".utf8)).isEmpty)
+
     print("Usage history")
     let goodRead = LiveAccountUsage(ok: true, limits: [LiveLimit(kind: "session", percent: 42, resetsAt: nil, label: nil),
                                                        LiveLimit(kind: "weekly_all", percent: 16, resetsAt: nil, label: nil),
