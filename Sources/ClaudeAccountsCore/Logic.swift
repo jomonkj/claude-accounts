@@ -158,7 +158,7 @@ public extension Status {
     func autoSwitch(cache: [String: CachedUsage], history: [UsageReading] = [], now: Date = Date(),
                     timeZone: TimeZone = .current) -> AutoSwitchDecision {
         var input = AutoSwitchInput(accounts: accounts, usage: cache, now: now.timeIntervalSince1970, timeZone: timeZone)
-        input.history = history
+        input.usageHistory = history
         return AutoSwitch.decide(input)
     }
 

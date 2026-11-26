@@ -10,10 +10,22 @@ public struct AutoSwitchInput: Sendable {
     /// For the reason text ("resets Thu").
     public var timeZone: TimeZone
     /// The app's own usage history (UsageHistory), for the forecast. Empty means rule 1 only.
-    public var history: [UsageReading] = []
+    public var usageHistory: [UsageReading] = []
+    /// Sessions stopped on a usage limit (engine `paused`).
+    public var paused: [PausedSession] = []
+    /// Recent Code tab sessions, to tell which are still running (SessionActivity.isRunning).
+    public var running: [SessionActivity] = []
+    /// Past auto-switch decisions (AutoSwitchLog), for the loop limit.
+    public var history: [AutoSwitchRecord] = []
 
     public init(accounts: [Account], usage: [String: CachedUsage], now: Double, timeZone: TimeZone = .current) {
         self.accounts = accounts; self.usage = usage; self.now = now; self.timeZone = timeZone
+    }
+
+    public init(accounts: [Account], usage: [String: CachedUsage], now: Double, timeZone: TimeZone = .current,
+                paused: [PausedSession], running: [SessionActivity] = [], history: [AutoSwitchRecord] = []) {
+        self.init(accounts: accounts, usage: usage, now: now, timeZone: timeZone)
+        self.paused = paused; self.running = running; self.history = history
     }
 }
 
@@ -38,6 +50,8 @@ public struct RankedAccount: Equatable, Sendable {
 public struct AutoSwitchDecision: Equatable, Sendable {
     /// The allowed accounts, best first.
     public let ranking: [RankedAccount]
+    /// What to do now (AutoSwitch.action).
+    public var action: AutoSwitchAction = .none
     /// The best account, or nil when no account is allowed.
     public var next: RankedAccount? { ranking.first }
 }
@@ -48,7 +62,7 @@ public struct AutoSwitchDecision: Equatable, Sendable {
 /// outputs (the action) into AutoSwitchDecision, so callers do not change.
 public enum AutoSwitch {
     public static func decide(_ input: AutoSwitchInput) -> AutoSwitchDecision {
-        let history = Dictionary(grouping: input.history.filter { $0.at <= input.now }, by: \.account)
+        let history = Dictionary(grouping: input.usageHistory.filter { $0.at <= input.now }, by: \.account)
         // Allowed: not current, mine, saved login, last live read good, 5-hour and weekly below 100%.
         // Model-scoped limits (weekly_scoped, for example Fable) are ignored.
         let ranked = input.accounts.compactMap { a -> RankedAccount? in
@@ -73,7 +87,9 @@ public enum AutoSwitch {
                                        weeklyResetsAt: first.weeklyResetsAt, forecast: first.forecast,
                                        reason: "\(first.reason); \(name) \(ruleFirst.reason)")
         }
-        return AutoSwitchDecision(ranking: ranking)
+        var decision = AutoSwitchDecision(ranking: ranking)
+        decision.action = action(input, ranking: decision.ranking)
+        return decision
     }
 
     /// The forecast needs this much usage history of the account (7 days).
