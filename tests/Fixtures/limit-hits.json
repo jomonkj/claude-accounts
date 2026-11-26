@@ -1,0 +1,4367 @@
+{
+ "hits": [
+  {
+   "window": "5h",
+   "resetsAt": 1794906000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000001",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000001",
+    "timestamp": "2026-11-17T05:42:28.909Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000001",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794906000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794906000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0001"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794913200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000002",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000002",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000002",
+    "timestamp": "2026-11-17T07:43:05.230Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000002",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794913200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794913200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0002"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000003",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000003",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000003",
+    "timestamp": "2026-11-17T15:31:49.281Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000003",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0003"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795099200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000004",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000004",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000004",
+    "timestamp": "2026-11-19T14:32:19.293Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000004",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 8:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795099200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795099200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0004"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795125000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000005",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000005",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000005",
+    "timestamp": "2026-11-19T20:02:50.477Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000005",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:20am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795125000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795125000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0005"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794144000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000006",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000006",
+    "version": "2.1.317",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000006",
+    "timestamp": "2026-11-08T09:53:13.015Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000006",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 6:50pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794144000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794144000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0006"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794913200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000007",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000007",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000007",
+    "timestamp": "2026-11-17T07:47:48.822Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000007",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794913200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794913200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0007"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000008",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000008",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000008",
+    "timestamp": "2026-11-17T15:33:40.650Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000008",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0008"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1794607200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000009",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000009",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000009",
+    "timestamp": "2026-11-13T13:23:11.383Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000009",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794607200,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794607200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0009"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1794607200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000010",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000010",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000010",
+    "timestamp": "2026-11-13T13:03:53.305Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000010",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794607200,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794607200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0010"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1794607200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000011",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000011",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000011",
+    "timestamp": "2026-11-13T13:23:06.727Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000011",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794607200,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794607200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0011"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1794607200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000012",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000012",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000012",
+    "timestamp": "2026-11-13T13:23:01.308Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000012",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794607200,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794607200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0012"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1794607200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000013",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000013",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000013",
+    "timestamp": "2026-11-13T13:03:47.702Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000013",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794607200,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794607200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0013"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794839400,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000014",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000014",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000014",
+    "timestamp": "2026-11-16T13:41:50.086Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000014",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 8pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794839400,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794839400,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0014"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794913200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000015",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000015",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000015",
+    "timestamp": "2026-11-17T07:52:14.635Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000015",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794913200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794913200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0015"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794921600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000016",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000016",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000016",
+    "timestamp": "2026-11-17T12:21:35.556Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000016",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 6:50pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794921600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794921600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0016"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000017",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000017",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000017",
+    "timestamp": "2026-11-17T15:31:35.960Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000017",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0017"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000018",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000018",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000018",
+    "timestamp": "2026-11-17T15:33:39.687Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000018",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0018"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000019",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000019",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000019",
+    "timestamp": "2026-11-17T15:46:12.483Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000019",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0019"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795174200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000020",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000020",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000020",
+    "timestamp": "2026-11-20T09:51:57.993Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000020",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 5pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795174200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795174200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0020"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795192800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000021",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000021",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000021",
+    "timestamp": "2026-11-20T15:37:48.482Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000021",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 10:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795192800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795192800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0021"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795207200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000022",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000022",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000022",
+    "timestamp": "2026-11-20T19:40:30.988Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000022",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:10am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795207200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795207200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0022"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795254000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000023",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000023",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000023",
+    "timestamp": "2026-11-21T07:51:12.897Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000023",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795254000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795254000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0023"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000024",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000024",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000024",
+    "timestamp": "2026-11-17T15:31:15.511Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000024",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0024"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794949800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000025",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000025",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000025",
+    "timestamp": "2026-11-17T17:32:53.720Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000025",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:40am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794949800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794949800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0025"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794949800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000026",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000026",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000026",
+    "timestamp": "2026-11-17T17:56:25.908Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000026",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:40am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794949800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794949800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0026"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794957600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000027",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000027",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000027",
+    "timestamp": "2026-11-17T19:43:49.895Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000027",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:50am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794957600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794957600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0027"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794999000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000028",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000028",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000028",
+    "timestamp": "2026-11-18T07:17:53.481Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000028",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:20pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794999000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794999000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0028"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794999000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000029",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000029",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000029",
+    "timestamp": "2026-11-18T07:21:37.980Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000029",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:20pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794999000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794999000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0029"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794999000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000030",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000030",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000030",
+    "timestamp": "2026-11-18T07:24:20.521Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000030",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:20pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794999000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794999000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0030"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795005600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000031",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000031",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000031",
+    "timestamp": "2026-11-18T10:55:10.882Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000031",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 6:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795005600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795005600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0031"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795099200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000032",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000032",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000032",
+    "timestamp": "2026-11-19T14:32:24.799Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000032",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 8:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795099200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795099200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0032"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1795528800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000033",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000033",
+    "version": "2.1.330",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000033",
+    "timestamp": "2026-11-23T09:01:00.837Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000033",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets Nov 24 at 7:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795528800,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795528800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0033"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794658200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000034",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000034",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000034",
+    "timestamp": "2026-11-14T10:27:42.021Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000034",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 5:40pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794658200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794658200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0034"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794949800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000035",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000035",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000035",
+    "timestamp": "2026-11-17T17:32:48.262Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000035",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:40am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794949800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794949800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0035"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794957600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000036",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000036",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000036",
+    "timestamp": "2026-11-17T19:43:49.083Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000036",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:50am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794957600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794957600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0036"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794999000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000037",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000037",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000037",
+    "timestamp": "2026-11-18T07:17:48.040Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000037",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:20pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794999000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794999000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0037"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795125000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000038",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000038",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000038",
+    "timestamp": "2026-11-19T20:02:51.404Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000038",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:20am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795125000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795125000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0038"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1795446000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000039",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000039",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000039",
+    "timestamp": "2026-11-20T04:23:37.454Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000039",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets Nov 23 at 8:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795446000,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795446000,
+     "unifiedRateLimitFallbackAvailable": true,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0039"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1795446000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000040",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000040",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000040",
+    "timestamp": "2026-11-20T04:23:36.331Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000040",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets Nov 23 at 8:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795446000,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795446000,
+     "unifiedRateLimitFallbackAvailable": true,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0040"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795174200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000041",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000041",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000041",
+    "timestamp": "2026-11-20T09:51:11.384Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000041",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 5pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795174200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795174200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0041"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795192800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000042",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000042",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000042",
+    "timestamp": "2026-11-20T15:40:01.988Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000042",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 10:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795192800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795192800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0042"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795207200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000043",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000043",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000043",
+    "timestamp": "2026-11-20T19:40:30.621Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000043",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:10am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795207200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795207200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0043"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795254000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000044",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000044",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000044",
+    "timestamp": "2026-11-21T07:50:01.406Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000044",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795254000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795254000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0044"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795099200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000045",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000045",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000045",
+    "timestamp": "2026-11-19T14:32:20.112Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000045",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 8:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795099200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795099200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0045"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795125000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000046",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000046",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000046",
+    "timestamp": "2026-11-19T20:02:04.757Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000046",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:20am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795125000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795125000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0046"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1795446000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000047",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000047",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000047",
+    "timestamp": "2026-11-20T04:23:38.120Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000047",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets Nov 23 at 8:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795446000,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795446000,
+     "unifiedRateLimitFallbackAvailable": true,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0047"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795166400,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000048",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000048",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000048",
+    "timestamp": "2026-11-20T06:24:55.360Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000048",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:50pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795166400,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795166400,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0048"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795174200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000049",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000049",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000049",
+    "timestamp": "2026-11-20T09:51:14.775Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000049",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 5pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795174200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795174200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0049"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795192800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000050",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000050",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000050",
+    "timestamp": "2026-11-20T15:38:17.787Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000050",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 10:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795192800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795192800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0050"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795254000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000051",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000051",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000051",
+    "timestamp": "2026-11-21T07:50:06.896Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000051",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795254000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795254000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0051"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1795212000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000052",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000052",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000052",
+    "timestamp": "2026-11-19T13:23:28.228Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000052",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets Nov 21 at 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795212000,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795212000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0052"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795633800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000053",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000053",
+    "version": "2.1.330",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000053",
+    "timestamp": "2026-11-25T17:36:45.935Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000053",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 12:40am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795633800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795633800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0053"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794839400,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000054",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000054",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000054",
+    "timestamp": "2026-11-16T13:41:51.255Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000054",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 8pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794839400,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794839400,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0054"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794859200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000055",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000055",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000055",
+    "timestamp": "2026-11-16T18:19:07.444Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000055",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 1:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794859200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794859200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0055"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1795528800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000056",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000056",
+    "version": "2.1.330",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000056",
+    "timestamp": "2026-11-23T09:01:02.453Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000056",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets Nov 24 at 7:30pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795528800,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795528800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0056"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795192800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000057",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000057",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000057",
+    "timestamp": "2026-11-20T15:37:43.276Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000057",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 10:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795192800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795192800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0057"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795207200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000058",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000058",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000058",
+    "timestamp": "2026-11-20T19:40:31.821Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000058",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 2:10am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795207200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795207200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0058"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794400800,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000059",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000059",
+    "version": "2.1.321",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000059",
+    "timestamp": "2026-11-11T11:08:35.779Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000059",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 6:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794400800,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794400800,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0059"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1795254000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000060",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000060",
+    "version": "2.1.326",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000060",
+    "timestamp": "2026-11-21T07:51:56.629Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000060",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 3:10pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1795254000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1795254000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0060"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794921600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000061",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000061",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000061",
+    "timestamp": "2026-11-17T12:21:37.036Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000061",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 6:50pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794921600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794921600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0061"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794936600,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000062",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000062",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000062",
+    "timestamp": "2026-11-17T15:31:17.731Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000062",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 11pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794936600,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794936600,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0062"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794999000,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000063",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000063",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000063",
+    "timestamp": "2026-11-18T07:17:55.427Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000063",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 4:20pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794999000,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794999000,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0063"
+   }
+  },
+  {
+   "window": "5h",
+   "resetsAt": 1794658200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000064",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000064",
+    "version": "2.1.325",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000064",
+    "timestamp": "2026-11-14T10:27:58.834Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000064",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your 5-hour limit \u00b7 resets 5:40pm (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorType": "rate_limit_error",
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794658200,
+      "rateLimitType": "five_hour",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794658200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "five_hour",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0064"
+   }
+  },
+  {
+   "window": "week",
+   "resetsAt": 1794607200,
+   "entry": {
+    "parentUuid": "10000000-0000-4000-8000-000000000065",
+    "isSidechain": false,
+    "userType": "external",
+    "cwd": "/Users/me/project",
+    "sessionId": "00000000-0000-4000-8000-000000000065",
+    "version": "2.1.322",
+    "gitBranch": "main",
+    "entrypoint": "claude-desktop",
+    "type": "assistant",
+    "uuid": "20000000-0000-4000-8000-000000000065",
+    "timestamp": "2026-11-13T18:08:53.632Z",
+    "message": {
+     "id": "30000000-0000-4000-8000-000000000065",
+     "container": null,
+     "model": "<synthetic>",
+     "role": "assistant",
+     "stop_reason": "stop_sequence",
+     "stop_sequence": "",
+     "type": "message",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "You've hit your weekly limit \u00b7 resets 3:30am (Asia/Calcutta)"
+      }
+     ],
+     "context_management": null,
+     "diagnostics": null,
+     "stop_details": null
+    },
+    "error": "rate_limit",
+    "isApiErrorMessage": true,
+    "apiError": "usage_limit_reached",
+    "apiErrorStatus": 429,
+    "apiErrorParams": {
+     "rate_limit_info": {
+      "status": "rejected",
+      "resetsAt": 1794607200,
+      "rateLimitType": "seven_day",
+      "overageStatus": "rejected",
+      "overageDisabledReason": "org_level_disabled",
+      "isUsingOverage": false
+     }
+    },
+    "quotaLimits": {
+     "status": "rejected",
+     "resetsAt": 1794607200,
+     "unifiedRateLimitFallbackAvailable": false,
+     "rateLimitType": "seven_day",
+     "overageStatus": "rejected",
+     "overageDisabledReason": "org_level_disabled",
+     "isUsingOverage": false
+    },
+    "requestId": "req_fixture0065"
+   }
+  }
+ ],
+ "notLimit": [
+  {
+   "parentUuid": "10000000-0000-4000-8000-000000000900",
+   "isSidechain": false,
+   "userType": "external",
+   "cwd": "/Users/me/project",
+   "sessionId": "00000000-0000-4000-8000-000000000900",
+   "version": "2.1.330",
+   "gitBranch": "main",
+   "entrypoint": "claude-desktop",
+   "type": "assistant",
+   "uuid": "20000000-0000-4000-8000-000000000900",
+   "timestamp": "2026-11-22T17:52:20.935Z",
+   "message": {
+    "id": "30000000-0000-4000-8000-000000000900",
+    "container": null,
+    "model": "<synthetic>",
+    "role": "assistant",
+    "stop_reason": "stop_sequence",
+    "stop_sequence": "",
+    "type": "message",
+    "usage": {
+     "input_tokens": 0,
+     "output_tokens": 0,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "API Error: Connection dropped (ECONNRESET). A VPN, firewall, or security software can cause this. Check those or switch networks, then try again."
+     }
+    ],
+    "context_management": null,
+    "diagnostics": null,
+    "stop_details": null
+   },
+   "error": "server_error",
+   "isApiErrorMessage": true,
+   "apiError": "connection_failed"
+  },
+  {
+   "parentUuid": "10000000-0000-4000-8000-000000000901",
+   "isSidechain": false,
+   "userType": "external",
+   "cwd": "/Users/me/project",
+   "sessionId": "00000000-0000-4000-8000-000000000901",
+   "version": "2.1.321",
+   "gitBranch": "main",
+   "entrypoint": "claude-desktop",
+   "type": "assistant",
+   "uuid": "20000000-0000-4000-8000-000000000901",
+   "timestamp": "2026-11-13T10:15:10.748Z",
+   "message": {
+    "id": "30000000-0000-4000-8000-000000000901",
+    "container": null,
+    "model": "<synthetic>",
+    "role": "assistant",
+    "stop_reason": "stop_sequence",
+    "stop_sequence": "",
+    "type": "message",
+    "usage": {
+     "input_tokens": 0,
+     "output_tokens": 0,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0
+    },
+    "content": [
+     {
+      "type": "text",
+      "text": "Failed to authenticate. API Error: 403 Attention Required! | Cloudflare"
+     }
+    ],
+    "context_management": null,
+    "diagnostics": null,
+    "stop_details": null
+   },
+   "error": "authentication_failed",
+   "isApiErrorMessage": true,
+   "apiErrorStatus": 403
+  }
+ ]
+}
