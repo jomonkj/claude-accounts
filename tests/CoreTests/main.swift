@@ -440,6 +440,17 @@ func main() async {
           == "Next: \(bothMine.account(B)!.shortTitle) · resets Thu, 40% left")
     check("panel: says when no account is free", nextLine(bothMine, [B: cached(5, 100)]) == "Next: none · no other account has quota left")
     check("panel: no next line when live usage is off", nextLine(offStatus, [B: cached(5, 60)]) == nil)
+    // C resets Mon with 30% left and was not used for 8 days; B resets Thu. The forecast picks B.
+    let idleC = (0...(8 * 24)).map { i in UsageReading(at: t0 - Double(i) * 3600, account: cID, fivePercent: 0, weeklyPercent: 70) }
+    let cMonday = [B: cached(5, 60, weekReset: t0 + 4 * 86400), cID: cached(5, 70, weekReset: t0 + 86400)]
+    check("panel: the reason shows the forecast when it changed the pick",
+          bothMine.nextLine(cache: cMonday, history: idleC, now: Date(timeIntervalSince1970: t0), timeZone: ist2)
+          == "Next: \(bothMine.account(B)!.shortTitle) · resets Thu, 40% left; \(bothMine.account(cID)!.shortTitle) resets Mon, but you will not use 30% before then")
+    check("switch targets use the forecast",
+          bothMine.switchTargets(cache: cMonday, history: idleC, now: Date(timeIntervalSince1970: t0)).map(\.id) == [B, cID])
+    check("the 90% warning uses the forecast",
+          bothMine.usageWarning(cache: cMonday.merging([A: cached(95)]) { a, _ in a }, history: idleC, enabled: true, alreadyWarned: [],
+                                now: Date(timeIntervalSince1970: t0), timeZone: ist2)?.target == B)
     check("switch targets with live usage: an account at its limit is not offered",
           bothMine.switchTargets(cache: [B: cached(5, 100), cID: cached(60, 70)], now: Date(timeIntervalSince1970: t0)).map(\.id) == [cID])
 
@@ -463,8 +474,10 @@ func main() async {
                              LiveLimit(kind: "weekly_all", percent: week, resetsAt: weekResets, label: nil)] + extra,
                     readAt: t0, error: error)
     }
-    func rank(_ accounts: [Account], _ u: [String: CachedUsage]) -> AutoSwitchDecision {
-        AutoSwitch.decide(AutoSwitchInput(accounts: accounts, usage: u, now: t0, timeZone: rankTZ))
+    func rank(_ accounts: [Account], _ u: [String: CachedUsage], history: [UsageReading]? = nil) -> AutoSwitchDecision {
+        var input = AutoSwitchInput(accounts: accounts, usage: u, now: t0, timeZone: rankTZ)
+        if let history { input.history = history }
+        return AutoSwitch.decide(input)
     }
     let P = "pppp0000-0000-0000-0000-000000000000", Q = "qqqq0000-0000-0000-0000-000000000000"
     let R = "rrrr0000-0000-0000-0000-000000000000"
@@ -492,9 +505,50 @@ func main() async {
           reason(weekly(week: 60, weekResets: t0 + 4 * day)) == "resets Thu, 40% left")
     check("reason: a weekly reset later today", reason(weekly(week: 12.4, weekResets: t0 + 3600)) == "resets today, 88% left")
     check("reason: no weekly reset known", reason(weekly(week: 60, weekResets: nil)) == "40% left")
+
+    // Forecast. P resets Mon with 40% left, Q resets Wed: rule 1 picks P.
+    let forecastUsage = [P: weekly(week: 60, weekResets: t0 + day), Q: weekly(week: 30, weekResets: t0 + 3 * day)]
+    let named = [acct(P, name: "Pat"), acct(Q, name: "Quinn")]
+    /// Hourly readings of P for `days` days up to now; `use` is P's weekly percent at hour i.
+    func pHistory(days: Int, use: (Int) -> Double) -> [UsageReading] {
+        (0...(days * 24)).map { i in UsageReading(at: t0 - Double(days * 24 - i) * 3600, account: P, fivePercent: 0, weeklyPercent: use(i)) }
+    }
+    let idle = pHistory(days: 8) { _ in 60 }
+    let busy = pHistory(days: 8) { i in Double(i % 50) * 2 }  // 2% each hour, every hour
+    check("forecast: an account that will not use its quota before its reset moves down",
+          rank(named, forecastUsage, history: idle).ranking.map(\.id) == [Q, P])
+    check("forecast: an account that will use its quota before its reset keeps its place",
+          rank(named, forecastUsage, history: busy).ranking.map(\.id) == [P, Q])
+    // 14 days of history; P uses 6% an hour for 10 hours a week. On Monday morning (before the reset)
+    // that is 60%, more than the 40% left; on Tuesday morning (after the reset) the same use does not count.
+    func weeklyHabit(on weekday: Int) -> [UsageReading] {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = rankTZ
+        var pct = 0.0
+        return pHistory(days: 14) { i in
+            let c = cal.dateComponents([.weekday, .hour], from: Date(timeIntervalSince1970: t0 - Double(14 * 24 - i) * 3600))
+            if c.weekday == weekday, (1...10).contains(c.hour!) { pct += 6 }
+            if c.weekday == 1, c.hour == 0 { pct = 0 }
+            return pct
+        }
+    }
+    check("forecast: use at the same weekday and hour before the reset keeps the account first",
+          rank(named, forecastUsage, history: weeklyHabit(on: 2)).ranking.map(\.id) == [P, Q])
+    check("forecast: use on other days does not count",
+          rank(named, forecastUsage, history: weeklyHabit(on: 3)).ranking.map(\.id) == [Q, P])
+    check("forecast: less than 7 days of history means no forecast",
+          rank(named, forecastUsage, history: pHistory(days: 6) { _ in 60 }).ranking.map(\.id) == [P, Q])
+    check("forecast: with no history the result equals rule 1",
+          rank(named, forecastUsage, history: []) == rank(named, forecastUsage) && rank(named, forecastUsage).ranking.map(\.id) == [P, Q])
+    check("forecast: the reason of the next account says when the forecast changed the pick",
+          rank(named, forecastUsage, history: idle).next?.reason == "resets Wed, 70% left; Pat resets Mon, but you will not use 40% before then")
+    check("forecast: the reason of a moved account",
+          rank(named, forecastUsage, history: idle).ranking.last?.reason == "resets Mon, but you will not use 40% before then")
+    check("forecast: no forecast note when the pick did not change",
+          rank(named, forecastUsage, history: busy).next?.reason == "resets Mon, 40% left")
     // Property test: 500 random cases from a fixed seed, so a failure repeats.
     var rng = SplitMix64(seed: 61)
     var badPick = 0, unstable = 0, orderDependent = 0, misordered = 0
+    var noHistoryDiffers = 0, shortHistoryDiffers = 0, forecastChangedSet = 0, negativeForecast = 0, forecastMoved = 0, forecastDown = 0
     for _ in 0..<500 {
         let n = Int.random(in: 1...6, using: &rng)
         let accounts = (0..<n).map { i in
@@ -509,17 +563,46 @@ func main() async {
                              error: Double.random(in: 0..<1, using: &rng) < 0.15 ? "network" : nil,
                              extra: Bool.random(using: &rng) ? [LiveLimit(kind: "weekly_scoped", percent: pct(), resetsAt: nil, label: "Fable")] : [])
         }
-        let d = rank(accounts, u)
+        // Random history: for each account, 0 to 14 days of readings every 1 to 6 hours.
+        var history: [UsageReading] = []
+        for a in accounts {
+            let days = Double(Int.random(in: 0...14, using: &rng)), step = Double(Int.random(in: 1...6, using: &rng)) * 3600
+            var t = t0 - days * day, w = Double(Int.random(in: 0...99, using: &rng))
+            while t <= t0 && days > 0 {
+                history.append(UsageReading(at: t, account: a.id, fivePercent: 0, weeklyPercent: w))
+                w = Bool.random(using: &rng) ? w : (w + Double(Int.random(in: 0...8, using: &rng))).truncatingRemainder(dividingBy: 100)
+                t += step
+            }
+        }
+        let d = rank(accounts, u, history: history)
+        let rule1 = rank(accounts, u)
+        if rank(accounts, u, history: []) != rule1 { noHistoryDiffers += 1 }
+        if rank(accounts, u, history: history.filter { $0.at > t0 - 7 * day + 1 }) != rule1 { shortHistoryDiffers += 1 }
+        if Set(d.ranking.map(\.id)) != Set(rule1.ranking.map(\.id)) { forecastChangedSet += 1 }
+        for r in d.ranking where (r.forecast ?? 0) < 0 { negativeForecast += 1 }
+        if d.ranking.map(\.id) != rule1.ranking.map(\.id) { forecastMoved += 1 }
+        if d.ranking.contains(where: \.movedDown) { forecastDown += 1 }
         for r in d.ranking {
             let a = accounts.first { $0.id == r.id }, c = u[r.id]
             let five = c?.limits.first { $0.kind == "session" }?.percent ?? 100, week = c?.limits.first { $0.kind == "weekly_all" }?.percent ?? 100
             if !(a?.owned == true && a?.savedLogin == true && a?.current == false && c?.error == nil && five < 100 && week < 100) { badPick += 1 }
         }
-        if rank(accounts, u) != d { unstable += 1 }
-        if rank(accounts.shuffled(using: &rng), u) != d { orderDependent += 1 }
+        if rank(accounts, u, history: history) != d { unstable += 1 }
+        if rank(accounts.shuffled(using: &rng), u, history: history.shuffled(using: &rng)) != d { orderDependent += 1 }
         for (x, y) in zip(d.ranking, d.ranking.dropFirst())
+        where (x.movedDown ? 1 : 0, x.weeklyResetsAt ?? .infinity, x.weeklyPercent) > (y.movedDown ? 1 : 0, y.weeklyResetsAt ?? .infinity, y.weeklyPercent) {
+            misordered += 1
+        }
+        for (x, y) in zip(rule1.ranking, rule1.ranking.dropFirst())
         where (x.weeklyResetsAt ?? .infinity, x.weeklyPercent) > (y.weeklyResetsAt ?? .infinity, y.weeklyPercent) { misordered += 1 }
     }
+    check("property (500 cases): with no history the result equals rule 1", noHistoryDiffers == 0)
+    check("property (500 cases): with less than 7 days of history the result equals rule 1", shortHistoryDiffers == 0)
+    check("property (500 cases): the forecast only reorders the allowed accounts", forecastChangedSet == 0)
+    check("property (500 cases): the forecast is never negative", negativeForecast == 0)
+    check("property (500 cases): the random history moves accounts down and changes some orders (the forecast is tested)",
+          forecastDown > 20 && forecastMoved > 0)
+    print("       (accounts moved down in \(forecastDown) cases, order changed in \(forecastMoved))")
     check("property (500 cases): every ranked account is allowed", badPick == 0)
     check("property (500 cases): the same inputs give the same output", unstable == 0)
     check("property (500 cases): the order of the accounts does not change the output", orderDependent == 0)

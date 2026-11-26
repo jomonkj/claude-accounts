@@ -20,7 +20,7 @@ final class Store: ObservableObject {
     private static let liveCacheKey = "liveUsageCache"
     /// One reading for each good live read of each account, for 35 days (UsageHistory). The
     /// forecast of the auto-switch ranking uses it. Saved in the app's preferences; never sent anywhere.
-    private var usageHistory: [UsageReading] = Store.loadUsageHistory()
+    private(set) var usageHistory: [UsageReading] = Store.loadUsageHistory()
     private static let usageHistoryKey = "usageHistory"
     /// Why live usage could not be read (for example, no Keychain access), shown in Settings.
     @Published var liveUsageProblem: String?
@@ -75,7 +75,7 @@ final class Store: ObservableObject {
             let s = try await engine.status()
             if s != status { status = s }
             if s.pendingRecovery && !recovering { await recover() }
-            notifier.update(s, cache: liveCache)
+            notifier.update(s, cache: liveCache, history: usageHistory)
         } catch let e as EngineError {
             banner = .error(e.message)
         } catch {
@@ -140,7 +140,7 @@ final class Store: ObservableObject {
     private func warnIfNearLimit() {
         let warnedKey = "usageWarningsSent"
         let warned = Set(UserDefaults.standard.stringArray(forKey: warnedKey) ?? [])
-        guard let s = status, let w = s.usageWarning(cache: liveCache, enabled: usageWarningOn, alreadyWarned: warned)
+        guard let s = status, let w = s.usageWarning(cache: liveCache, history: usageHistory, enabled: usageWarningOn, alreadyWarned: warned)
         else { return }
         UserDefaults.standard.set(Array((warned.union([w.key])).sorted().suffix(200)), forKey: warnedKey)
         notifier.usageWarning(w, targetTitle: w.target.flatMap { s.account($0)?.shortTitle })
