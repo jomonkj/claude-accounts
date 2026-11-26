@@ -79,10 +79,25 @@ struct GeneralTab: View {
                 Toggle(isOn: Binding(get: { store.usageWarningOn }, set: { store.setUsageWarning($0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Warn at 90% of the 5-hour limit")
-                        Text("A notification names your account with the most free capacity, with a Switch button. Once for each 5-hour window.")
+                        Text("A notification names your next account (soonest weekly reset first), with a Switch button. Once for each 5-hour window.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Toggle(isOn: Binding(get: { store.autoSwitchOn }, set: { store.setAutoSwitch($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-switch at limit")
+                        Text("When the account hits its limit, go to the next account and resume the stopped sessions.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Toggle(isOn: Binding(get: { store.autoSwitchDryRun }, set: { store.setAutoSwitchDryRun($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Dry run")
+                        Text("Only write what auto-switch would do to the switch log. This version never switches.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(!store.autoSwitchOn)
             }
             Section("Keyboard shortcuts") {
                 ShortcutToggle(key: .openPanel, title: "Open the panel")

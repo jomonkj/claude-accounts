@@ -18,6 +18,10 @@ final class Store: ObservableObject {
     @Published var liveCache: [String: CachedUsage] = Store.loadLiveCache()
     private var lastLiveAttempt: Double?
     private static let liveCacheKey = "liveUsageCache"
+    /// One reading for each good live read of each account, for 35 days (UsageHistory). The
+    /// forecast of the auto-switch ranking uses it. Saved in the app's preferences; never sent anywhere.
+    private(set) var usageHistory: [UsageReading] = Store.loadUsageHistory()
+    private static let usageHistoryKey = "usageHistory"
     /// Why live usage could not be read (for example, no Keychain access), shown in Settings.
     @Published var liveUsageProblem: String?
     /// The Claude Safe Storage password, kept in memory only for this launch. Never written anywhere.
@@ -54,6 +58,7 @@ final class Store: ObservableObject {
         if !UserDefaults.standard.bool(forKey: "welcomeDone") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showWelcome() }
         }
+        updateAutoSwitchWatch()
         Task { await tick() }
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { await self?.tick() }
@@ -71,7 +76,7 @@ final class Store: ObservableObject {
             let s = try await engine.status()
             if s != status { status = s }
             if s.pendingRecovery && !recovering { await recover() }
-            notifier.update(s)
+            notifier.update(s, cache: liveCache, history: usageHistory)
         } catch let e as EngineError {
             banner = .error(e.message)
         } catch {
@@ -118,6 +123,8 @@ final class Store: ObservableObject {
         liveUsageProblem = nil
         let merged = LiveUsageCache.merge(liveCache, result, now: Date().timeIntervalSince1970)
         if merged != liveCache { liveCache = merged; saveLiveCache() }
+        usageHistory = UsageHistory.record(usageHistory, reads: result, now: Date().timeIntervalSince1970)
+        UserDefaults.standard.set(UsageHistory.encode(usageHistory), forKey: Self.usageHistoryKey)
         warnIfNearLimit()
     }
 
@@ -130,14 +137,88 @@ final class Store: ObservableObject {
         objectWillChange.send()
     }
 
+    // MARK: auto-switch (spec #58). In this release it only logs: it never switches.
+
+    /// "Auto-switch at limit", off by default, and "Dry run", on by default: app settings, like the warning.
+    static let autoSwitchKey = "autoSwitch"
+    static let autoSwitchDryRunKey = "autoSwitchDryRun"
+    private static let autoSwitchHistoryKey = "autoSwitchHistory"
+    var autoSwitchOn: Bool { UserDefaults.standard.object(forKey: Self.autoSwitchKey) as? Bool ?? false }
+    var autoSwitchDryRun: Bool { UserDefaults.standard.object(forKey: Self.autoSwitchDryRunKey) as? Bool ?? true }
+    /// Past decisions (AutoSwitchLog): the switches in it are the past auto-switches for the loop limit.
+    private var autoSwitchHistory: [AutoSwitchRecord] =
+        UserDefaults.standard.data(forKey: Store.autoSwitchHistoryKey).map(AutoSwitchLog.decode) ?? []
+    private var transcriptWatcher: TranscriptWatcher?
+    private var autoSwitchRunning = false
+    private var autoSwitchWake: DispatchWorkItem?
+
+    func setAutoSwitch(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: Self.autoSwitchKey)
+        objectWillChange.send()
+        updateAutoSwitchWatch()
+        if on { Task { await runAutoSwitch() } }
+    }
+
+    func setAutoSwitchDryRun(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: Self.autoSwitchDryRunKey)
+        objectWillChange.send()
+    }
+
+    /// The file watch runs only while auto-switch is on.
+    private func updateAutoSwitchWatch() {
+        if autoSwitchOn {
+            if transcriptWatcher == nil {
+                transcriptWatcher = TranscriptWatcher { [weak self] in Task { await self?.runAutoSwitch() } }
+                transcriptWatcher?.start()
+            }
+        } else {
+            transcriptWatcher?.stop(); transcriptWatcher = nil
+            autoSwitchWake?.cancel(); autoSwitchWake = nil
+        }
+    }
+
+    /// Read the paused and running sessions (engine `sessions`), decide (AutoSwitch.decide) and write a
+    /// new decision to the switch log as "autoswitch (dry run): …". Called by the file watch, by the
+    /// timer and at the end of a `wait`. Needs live usage: without it no account is known to be free.
+    func runAutoSwitch() async {
+        guard autoSwitchOn, !autoSwitchRunning, !RenderMode.isOn(), let s = status, s.settings.liveUsageOn else { return }
+        autoSwitchRunning = true
+        defer { autoSwitchRunning = false }
+        let r = await engine.run(["sessions"])
+        guard r.ok, let sessions = try? JSONDecoder().decode(EngineSessions.self, from: Data(r.output.utf8)) else { return }
+        let now = Date().timeIntervalSince1970
+        var input = AutoSwitchInput(accounts: s.accounts, usage: liveCache, now: now)
+        input.paused = sessions.paused; input.running = sessions.running; input.history = autoSwitchHistory
+        input.usageHistory = usageHistory
+        let action = AutoSwitch.decide(input).action
+        let (history, line) = AutoSwitchLog.record(autoSwitchHistory, action, now: now)
+        if history != autoSwitchHistory {
+            autoSwitchHistory = history
+            UserDefaults.standard.set(AutoSwitchLog.encode(history), forKey: Self.autoSwitchHistoryKey)
+        }
+        // This release never switches, dry run on or off: every decision is only logged.
+        if let line { _ = await engine.run(["note", line]) }
+        // A wait ends at a set time: decide again then, not at the next timer run.
+        autoSwitchWake?.cancel(); autoSwitchWake = nil
+        if case .wait(let until) = action {
+            let work = DispatchWorkItem { [weak self] in Task { await self?.runAutoSwitch() } }
+            autoSwitchWake = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(1, until - now + 1), execute: work)
+        }
+    }
+
     /// Send the 90% warning once for each 5-hour window of the active account.
     private func warnIfNearLimit() {
         let warnedKey = "usageWarningsSent"
         let warned = Set(UserDefaults.standard.stringArray(forKey: warnedKey) ?? [])
-        guard let s = status, let w = s.usageWarning(cache: liveCache, enabled: usageWarningOn, alreadyWarned: warned)
+        guard let s = status, let w = s.usageWarning(cache: liveCache, history: usageHistory, enabled: usageWarningOn, alreadyWarned: warned)
         else { return }
         UserDefaults.standard.set(Array((warned.union([w.key])).sorted().suffix(200)), forKey: warnedKey)
         notifier.usageWarning(w, targetTitle: w.target.flatMap { s.account($0)?.shortTitle })
+    }
+
+    private static func loadUsageHistory() -> [UsageReading] {
+        UserDefaults.standard.data(forKey: usageHistoryKey).map(UsageHistory.decode) ?? []
     }
 
     private static func loadLiveCache() -> [String: CachedUsage] {
@@ -166,6 +247,7 @@ final class Store: ObservableObject {
         _ = await run(["tick"])
         await refresh()
         await refreshLiveUsage()
+        await runAutoSwitch()
         if Date().timeIntervalSince(lastUpdateCheck) > 24 * 3600 { await checkForUpdate() }
     }
 

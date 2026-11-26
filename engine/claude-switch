@@ -6,6 +6,9 @@ signing in again, and can share sessions across accounts.
 
 Commands (all print JSON unless noted):
   status                      accounts, saved logins, paused sessions, settings
+  paused                      sessions stopped on a usage limit, with the window and the reset epoch
+  sessions                    paused sessions and recent session activity, for auto-switch
+  note <text>                 write one auto-switch line ("autoswitch ...") to the switch log
   list                        human-readable table (default for `claude-accounts`)
   switch <account> [--force]  quit Claude, save this login, load <account>, open Claude
   verify <account>            wait until Claude runs signed in as <account>
@@ -574,6 +577,33 @@ def session_data(path):
     return read_json(path, {}) or {}
 
 
+RATE_LIMIT_WINDOWS = {"five_hour": "5h", "seven_day": "week"}
+
+
+def limit_entry(e):
+    """(text, window, resets, resetsAt) of a transcript entry that is a usage-limit error, else None.
+    The structured fields come first: `error: "rate_limit"` and the rate limit info, whose
+    `rateLimitType` names the window and whose `resetsAt` is the exact reset (epoch seconds).
+    An entry without them (older Claude versions) falls back to the message text."""
+    if not isinstance(e, dict) or not e.get("isApiErrorMessage"):
+        return None
+    content = (e.get("message") or {}).get("content")
+    text = " ".join(c.get("text", "") for c in content if isinstance(c, dict)) if isinstance(content, list) else str(content)
+    reset = re.search(r"resets? ([^·\n]+)", text)
+    resets = reset.group(1).strip() if reset else ""
+    params = e.get("apiErrorParams") if isinstance(e.get("apiErrorParams"), dict) else {}
+    info = next((i for i in (params.get("rate_limit_info"), e.get("quotaLimits")) if isinstance(i, dict)), None)
+    if e.get("error") == "rate_limit" and info is not None:
+        kind = info.get("rateLimitType")
+        window = next((w for k, w in RATE_LIMIT_WINDOWS.items() if isinstance(kind, str) and kind.startswith(k)), None)
+        at = info.get("resetsAt")
+        return (text, window or limit_window(text),
+                resets, at if isinstance(at, int) and not isinstance(at, bool) else reset_timestamp(resets, e.get("timestamp", "")))
+    if "limit" not in text.lower():
+        return None
+    return text, limit_window(text), resets, reset_timestamp(resets, e.get("timestamp", ""))
+
+
 def paused_sessions(days=3):
     """Sessions whose last turn ended on a usage-limit error. The account is the one active at
     the stop time (see owner_at), because sync copies a session into several account folders."""
@@ -592,14 +622,12 @@ def paused_sessions(days=3):
                 e = json.loads(line)
                 if e.get("type") in ("assistant", "user"):
                     last = e
-        if not last or last.get("type") != "assistant" or not last.get("isApiErrorMessage"):
+        if not last or last.get("type") != "assistant":
             continue
-        content = (last.get("message") or {}).get("content")
-        text = " ".join(c.get("text", "") for c in content if isinstance(c, dict)) if isinstance(content, list) else str(content)
-        if "limit" not in text.lower():
+        found = limit_entry(last)
+        if not found:
             continue
-        reset = re.search(r"resets? ([^·\n]+)", text)
-        resets = reset.group(1).strip() if reset else ""
+        text, window, resets, resets_at = found
         stopped = last.get("timestamp", "")
         if timeline is None:
             timeline, known = active_timeline(), set(known_accounts())
@@ -610,8 +638,25 @@ def paused_sessions(days=3):
         account = owner_at(at, timeline, known, f.split(os.sep)[-3])
         out.append({"id": sid, "title": d.get("title") or "Untitled", "account": account,
                     "cwd": d.get("cwd", ""), "message": text.strip()[:160], "resets": resets,
-                    "resetsAt": reset_timestamp(resets, stopped), "stoppedAt": stopped})
+                    "window": window, "resetsAt": resets_at, "stoppedAt": stopped})
     out.sort(key=lambda x: x["stoppedAt"], reverse=True)
+    return out
+
+
+def running_sessions(days=1):
+    """Recent sessions that are not archived, with the session index times in epoch seconds. The
+    app decides from these which sessions still run (SessionActivity.isRunning)."""
+    out = []
+    for m, d, f in recent_sessions(days).values():
+        act = d.get("lastActivityAt")
+        if d.get("isArchived") or not d.get("sessionId") or not isinstance(act, (int, float)):
+            continue
+        edge = d.get("lastTurnEdgeAt")
+        turns = d.get("completedTurns")
+        out.append({"id": d["sessionId"], "lastActivityAt": act / 1000,
+                    "lastTurnEdgeAt": edge / 1000 if isinstance(edge, (int, float)) else None,
+                    "completedTurns": turns if isinstance(turns, int) else None})
+    out.sort(key=lambda x: x["id"])
     return out
 
 
@@ -1573,6 +1618,15 @@ def main(argv):
     s = settings()
     if cmd == "status":
         out = status()
+    elif cmd == "paused":
+        out = paused_sessions()
+    elif cmd == "sessions":
+        out = {"paused": paused_sessions(), "running": running_sessions()}
+    elif cmd == "note":
+        text = " ".join(args)
+        if not text.startswith("autoswitch") or "\n" in text or "\r" in text:
+            raise Fail("Usage: note <one line that starts with autoswitch>")
+        log(text); out = {"ok": True}
     elif cmd == "list":
         return cmd_list()
     elif cmd == "switch":

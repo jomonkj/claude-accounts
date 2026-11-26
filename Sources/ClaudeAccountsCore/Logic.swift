@@ -153,16 +153,48 @@ public extension Status {
         paused.filter { !alreadyNotified.contains($0.id) }
     }
 
-    /// Accounts a notification can offer to switch to: mine, with a saved login, not current.
-    func switchTargets(limit: Int = 3) -> [Account] {
-        Array(accounts.filter { !$0.current && $0.savedLogin && $0.owned }.prefix(limit))
+    /// The auto-switch decision for this status (AutoSwitch.decide): the ranking of the next accounts.
+    /// `history` is the app's usage history, for the forecast.
+    func autoSwitch(cache: [String: CachedUsage], history: [UsageReading] = [], now: Date = Date(),
+                    timeZone: TimeZone = .current) -> AutoSwitchDecision {
+        var input = AutoSwitchInput(accounts: accounts, usage: cache, now: now.timeIntervalSince1970, timeZone: timeZone)
+        input.usageHistory = history
+        return AutoSwitch.decide(input)
     }
 
-    /// Title and body of the notification for a paused session.
-    func notificationText(for p: PausedSession) -> (title: String, body: String) {
+    /// The panel line "Next: B · resets Thu, 40% left", or nil when live usage is off.
+    func nextLine(cache: [String: CachedUsage], history: [UsageReading] = [], now: Date = Date(),
+                  timeZone: TimeZone = .current) -> String? {
+        guard settings.liveUsageOn else { return nil }
+        guard let next = autoSwitch(cache: cache, history: history, now: now, timeZone: timeZone).next else {
+            return "Next: none · no other account has quota left"
+        }
+        return "Next: \(account(next.id)?.shortTitle ?? String(next.id.prefix(8))) · \(next.reason)"
+    }
+
+    /// Accounts a notification can offer to switch to, best first. With live usage on, the
+    /// auto-switch ranking; without live usage (no usage to rank), mine, with a saved login, not current.
+    func switchTargets(cache: [String: CachedUsage] = [:], history: [UsageReading] = [], now: Date = Date(),
+                       limit: Int = 3) -> [Account] {
+        guard settings.liveUsageOn else {
+            return Array(accounts.filter { !$0.current && $0.savedLogin && $0.owned }.prefix(limit))
+        }
+        return Array(autoSwitch(cache: cache, history: history, now: now).ranking.compactMap { account($0.id) }.prefix(limit))
+    }
+
+    /// Title and body of the notification for a paused session. The reset is the exact time from
+    /// the engine (for example "Resets Sun 4:50 PM."); the reset text only when that time is not known.
+    func notificationText(for p: PausedSession, now: Date = Date(), timeZone: TimeZone = .current) -> (title: String, body: String) {
         let who = account(p.account)?.title ?? String(p.account.prefix(8))
-        let reset = p.resets.isEmpty ? "" : " Resets \(p.resets)."
-        return ("Usage limit reached", "\"\(p.title)\" stopped on \(who).\(reset)")
+        let reset: String
+        if let at = p.resetsAt {
+            reset = at > now.timeIntervalSince1970
+                ? " Resets " + Self.resetTime(Date(timeIntervalSince1970: at), now: now, timeZone: timeZone) + "." : ""
+        } else {
+            reset = p.resets.isEmpty ? "" : " Resets \(p.resets)."
+        }
+        let title = switch p.window { case "5h": "5-hour limit reached"; case "week": "Weekly limit reached"; default: "Usage limit reached" }
+        return (title, "\"\(p.title)\" stopped on \(who).\(reset)")
     }
 
     /// Grey line under an account that hit its limit, for example "Weekly limit resets Mon 8:30 PM".
@@ -200,24 +232,20 @@ public extension Status {
 
     /// The warning when the active account reaches 90% of its 5-hour limit, or nil. It uses fresh
     /// values only (a failed newest read can be out of date), and comes once for each 5-hour window:
-    /// `alreadyWarned` has the keys of the warnings already sent. It names the "mine" account with
-    /// a saved login and the most free capacity: under 90% of both its 5-hour and weekly limits.
-    func usageWarning(cache: [String: CachedUsage], enabled: Bool, alreadyWarned: Set<String>) -> UsageWarning? {
+    /// `alreadyWarned` has the keys of the warnings already sent. It names the next account of the
+    /// auto-switch ranking, with the reason.
+    func usageWarning(cache: [String: CachedUsage], history: [UsageReading] = [], enabled: Bool, alreadyWarned: Set<String>,
+                      now: Date = Date(), timeZone: TimeZone = .current) -> UsageWarning? {
         guard enabled, settings.liveUsageOn, let cur = currentAccount, let c = cache[cur.id], c.error == nil,
               let five = c.limits.first(where: { $0.kind == "session" }), five.percent >= 90 else { return nil }
         let key = "\(cur.id)|\(five.resetsAt.map { String(Int($0)) } ?? "unknown")"
         guard !alreadyWarned.contains(key) else { return nil }
-        func percent(_ u: CachedUsage?, _ kind: String) -> Double? { u?.limits.first { $0.kind == kind }?.percent }
-        let free = accounts.filter { $0.owned && !$0.current && $0.savedLogin }.compactMap { a -> (Account, Double, Double)? in
-            guard let f = percent(cache[a.id], "session"), f < 90 else { return nil }
-            let w = percent(cache[a.id], "weekly_all") ?? 0
-            return w < 90 ? (a, f, w) : nil
-        }.min { ($0.1, $0.2, $0.0.title) < ($1.1, $1.2, $1.0.title) }
-        let pct = { (p: Double) in "\(Int(p.rounded()))%" }
-        let first = "\(cur.title) is at \(pct(five.percent)) of its 5-hour limit."
-        let body = free.map { a, f, w in "\(first) \(a.title) has the most free capacity: 5h \(pct(f)), week \(pct(w))." }
+        let next = autoSwitch(cache: cache, history: history, now: now, timeZone: timeZone).next
+        let pct = "\(Int(five.percent.rounded()))%"
+        let first = "\(cur.title) is at \(pct) of its 5-hour limit."
+        let body = next.map { "\(first) Next: \(account($0.id)?.title ?? $0.id) · \($0.reason)." }
             ?? "\(first) No other account of yours has free capacity now."
-        return UsageWarning(key: key, title: "5-hour limit at \(pct(five.percent))", body: body, target: free?.0.id)
+        return UsageWarning(key: key, title: "5-hour limit at \(pct)", body: body, target: next?.id)
     }
 
     /// Second line of a paused session row: the reset time while it is in the future, then the account.
