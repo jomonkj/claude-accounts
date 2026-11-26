@@ -35,14 +35,15 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     /// Notify each paused session one time. Sessions that are no longer paused are forgotten,
     /// so a session that stops on the limit again is notified again.
-    func update(_ status: Status) {
+    /// `cache` is the live usage, for the order of the "Switch to" buttons (the auto-switch ranking).
+    func update(_ status: Status, cache: [String: CachedUsage]) {
         guard started else { return }
         let now = Set(status.paused.map(\.id))
         let fresh = status.pausedToNotify(alreadyNotified: notified)
         notified = notified.intersection(now).union(fresh.map(\.id))
         guard allowed, let center else { return }
         for p in fresh {
-            let targets = status.switchTargets()
+            let targets = status.switchTargets(cache: cache)
             let category = "limit-\(p.id)"
             let actions = targets.map {
                 UNNotificationAction(identifier: "switch:\($0.id)", title: "Switch to \($0.shortTitle)", options: [.foreground])
@@ -61,7 +62,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
-    /// The 90% warning, with a Switch button for the account with the most free capacity.
+    /// The 90% warning, with a Switch button for the next account of the auto-switch ranking.
     /// The click shows the normal switch confirmation; the app never switches by itself.
     func usageWarning(_ w: UsageWarning, targetTitle: String?) {
         guard started, allowed, let center else { return }

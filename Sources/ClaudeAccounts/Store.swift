@@ -18,6 +18,10 @@ final class Store: ObservableObject {
     @Published var liveCache: [String: CachedUsage] = Store.loadLiveCache()
     private var lastLiveAttempt: Double?
     private static let liveCacheKey = "liveUsageCache"
+    /// One reading for each good live read of each account, for 35 days (UsageHistory). The
+    /// forecast of the auto-switch ranking uses it. Saved in the app's preferences; never sent anywhere.
+    private var usageHistory: [UsageReading] = Store.loadUsageHistory()
+    private static let usageHistoryKey = "usageHistory"
     /// Why live usage could not be read (for example, no Keychain access), shown in Settings.
     @Published var liveUsageProblem: String?
     /// The Claude Safe Storage password, kept in memory only for this launch. Never written anywhere.
@@ -71,7 +75,7 @@ final class Store: ObservableObject {
             let s = try await engine.status()
             if s != status { status = s }
             if s.pendingRecovery && !recovering { await recover() }
-            notifier.update(s)
+            notifier.update(s, cache: liveCache)
         } catch let e as EngineError {
             banner = .error(e.message)
         } catch {
@@ -118,6 +122,8 @@ final class Store: ObservableObject {
         liveUsageProblem = nil
         let merged = LiveUsageCache.merge(liveCache, result, now: Date().timeIntervalSince1970)
         if merged != liveCache { liveCache = merged; saveLiveCache() }
+        usageHistory = UsageHistory.record(usageHistory, reads: result, now: Date().timeIntervalSince1970)
+        UserDefaults.standard.set(UsageHistory.encode(usageHistory), forKey: Self.usageHistoryKey)
         warnIfNearLimit()
     }
 
@@ -138,6 +144,10 @@ final class Store: ObservableObject {
         else { return }
         UserDefaults.standard.set(Array((warned.union([w.key])).sorted().suffix(200)), forKey: warnedKey)
         notifier.usageWarning(w, targetTitle: w.target.flatMap { s.account($0)?.shortTitle })
+    }
+
+    private static func loadUsageHistory() -> [UsageReading] {
+        UserDefaults.standard.data(forKey: usageHistoryKey).map(UsageHistory.decode) ?? []
     }
 
     private static func loadLiveCache() -> [String: CachedUsage] {
