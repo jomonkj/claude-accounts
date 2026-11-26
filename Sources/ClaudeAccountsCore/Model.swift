@@ -268,7 +268,7 @@ public struct UsageWarning: Equatable, Sendable {
     public let key: String
     public let title: String
     public let body: String
-    /// The "mine" account with the most free capacity, or nil when none has free capacity.
+    /// The next account of the auto-switch ranking, or nil when no account is allowed.
     public let target: String?
 }
 

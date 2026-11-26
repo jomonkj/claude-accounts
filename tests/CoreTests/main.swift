@@ -14,6 +14,19 @@ final class Locked<T>: @unchecked Sendable {
     func mutate(_ f: (inout T) -> Void) { lock.lock(); f(&v); lock.unlock() }
 }
 
+/// A random generator with a fixed seed, so a property test gives the same cases on every run.
+struct SplitMix64: RandomNumberGenerator {
+    var state: UInt64
+    init(seed: UInt64) { state = seed }
+    mutating func next() -> UInt64 {
+        state &+= 0x9E3779B97F4A7C15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+        return z ^ (z >> 31)
+    }
+}
+
 func check(_ name: String, _ ok: @autoclosure () -> Bool) {
     if ok() { passed += 1; print("  ok   \(name)") } else { failed += 1; print("  FAIL \(name)") }
 }
@@ -105,7 +118,6 @@ func main() async {
 
     check("paused to notify: new one", s.pausedToNotify(alreadyNotified: []).map(\.id) == ["local_p1"])
     check("paused to notify: already notified", s.pausedToNotify(alreadyNotified: ["local_p1"]).isEmpty)
-    check("switch targets: mine, saved, not current", s.switchTargets().map(\.id) == [B])
     let note = s.notificationText(for: s.paused[0])
     check("notification text", note.title == "Usage limit reached"
           && note.body == "\"AWS capacity\" stopped on jomon@example.com (Team). Resets 4:50pm (Asia/Calcutta).")
@@ -370,28 +382,30 @@ func main() async {
     check("no state when the setting is off", state(offStatus, A, cache) == nil)
     print("Usage warning (90% of the 5-hour limit)")
     let cID = "cccc3333-0000-0000-0000-000000000000"
-    func cached(_ five: Double, _ week: Double = 10, reset: Double? = 1794136800, error: String? = nil) -> CachedUsage {
+    func cached(_ five: Double, _ week: Double = 10, reset: Double? = 1794136800, weekReset: Double? = nil, error: String? = nil) -> CachedUsage {
         CachedUsage(limits: [LiveLimit(kind: "session", percent: five, resetsAt: reset, label: nil),
-                             LiveLimit(kind: "weekly_all", percent: week, resetsAt: nil, label: nil)], readAt: t0, error: error)
+                             LiveLimit(kind: "weekly_all", percent: week, resetsAt: weekReset, label: nil)], readAt: t0, error: error)
     }
     // A is the active "mine" account; B is "mine" with a saved login; C is not "mine".
     let mineAndOther = variant { $0[2]["savedLogin"] = true; $0[2]["hidden"] = false }
     func warn(_ st: Status, _ c: [String: CachedUsage], enabled: Bool = true, warned: Set<String> = []) -> UsageWarning? {
-        st.usageWarning(cache: c, enabled: enabled, alreadyWarned: warned)
+        st.usageWarning(cache: c, enabled: enabled, alreadyWarned: warned, now: Date(timeIntervalSince1970: t0), timeZone: ist2)
     }
     check("no warning at 89%", warn(mineAndOther, [A: cached(89), B: cached(5)]) == nil)
     let w90 = warn(mineAndOther, [A: cached(90), B: cached(5, 17)])
-    check("a warning at 90%, naming the mine account with free capacity", w90?.target == B
+    check("a warning at 90%, naming the next account of the ranking and the reason", w90?.target == B
           && w90?.title == "5-hour limit at 90%"
-          && w90?.body == "\(s.currentAccount!.title) is at 90% of its 5-hour limit. \(s.account(B)!.title) has the most free capacity: 5h 5%, week 17%.")
+          && w90?.body == "\(s.currentAccount!.title) is at 90% of its 5-hour limit. Next: \(s.account(B)!.title) · 83% left.")
     check("never names an account that is not mine, even with more free capacity",
           warn(mineAndOther, [A: cached(95), B: cached(40), cID: cached(0)])?.target == B)
-    check("picks the mine account with the most free 5-hour capacity",
-          warn(variant { $0[2]["owned"] = true; $0[2]["savedLogin"] = true; $0[2]["hidden"] = false }, [A: cached(95), B: cached(40), cID: cached(12)])?.target == cID)
-    let full = warn(mineAndOther, [A: cached(97), B: cached(91)])
+    check("names the first account of the ranking: the soonest weekly reset, not the most free 5-hour capacity",
+          warn(variant { $0[2]["owned"] = true; $0[2]["savedLogin"] = true; $0[2]["hidden"] = false },
+               [A: cached(95), B: cached(5, 10, weekReset: t0 + 5 * 86400), cID: cached(60, 70, weekReset: t0 + 86400)])?.target == cID)
+    let full = warn(mineAndOther, [A: cached(97), B: cached(100)])
     check("no free mine account: the warning says so and offers no switch", full != nil && full?.target == nil
           && full?.body == "\(s.currentAccount!.title) is at 97% of its 5-hour limit. No other account of yours has free capacity now.")
-    check("an account near its weekly limit is not free", warn(mineAndOther, [A: cached(95), B: cached(5, 92)])?.target == nil)
+    check("an account at its weekly limit is not free", warn(mineAndOther, [A: cached(95), B: cached(5, 100)])?.target == nil)
+    check("an account near (not at) its weekly limit is still offered", warn(mineAndOther, [A: cached(95), B: cached(5, 92)])?.target == B)
     check("an account with no usage value is not offered", warn(mineAndOther, [A: cached(95)])?.target == nil)
     check("no warning when the warning setting is off", warn(mineAndOther, [A: cached(95), B: cached(5)], enabled: false) == nil)
     check("no warning when live usage is off", warn(offStatus, [A: cached(95), B: cached(5)]) == nil)
@@ -399,11 +413,129 @@ func main() async {
     check("one warning per window: the same window does not warn again",
           warn(mineAndOther, [A: cached(96), B: cached(5)], warned: [w90!.key]) == nil)
     check("a new window warns again", warn(mineAndOther, [A: cached(96, reset: 1794154800), B: cached(5)], warned: [w90!.key]) != nil)
+    check("switch targets without live usage: mine, saved, not current", offStatus.switchTargets().map(\.id) == [B])
+    let bothMine = variant { $0[2]["owned"] = true; $0[2]["savedLogin"] = true; $0[2]["hidden"] = false }
+    check("switch targets with live usage: the auto-switch ranking, best first",
+          bothMine.switchTargets(cache: [B: cached(5, 10, weekReset: t0 + 5 * 86400), cID: cached(60, 70, weekReset: t0 + 86400)],
+                                 now: Date(timeIntervalSince1970: t0)).map(\.id) == [cID, B])
+    func nextLine(_ st: Status, _ c: [String: CachedUsage]) -> String? {
+        st.nextLine(cache: c, now: Date(timeIntervalSince1970: t0), timeZone: ist2)
+    }
+    check("panel: the next account and the reason", nextLine(bothMine, [B: cached(5, 60, weekReset: t0 + 4 * 86400)])
+          == "Next: \(bothMine.account(B)!.shortTitle) · resets Thu, 40% left")
+    check("panel: says when no account is free", nextLine(bothMine, [B: cached(5, 100)]) == "Next: none · no other account has quota left")
+    check("panel: no next line when live usage is off", nextLine(offStatus, [B: cached(5, 60)]) == nil)
+    check("switch targets with live usage: an account at its limit is not offered",
+          bothMine.switchTargets(cache: [B: cached(5, 100), cID: cached(60, 70)], now: Date(timeIntervalSince1970: t0)).map(\.id) == [cID])
 
     let demo = try? JSONDecoder().decode([String: LiveAccountUsage].self, from: Data(#"{"a":{"ok":true,"error":null,"limits":[{"kind":"session","percent":12,"resetsAt":null,"label":null}]}}"#.utf8))
     check("live usage decodes (demo renders)", demo?["a"]?.limit("session")?.percent == 12)
     let oldSettings = try! JSONDecoder().decode(EngineSettings.self, from: Data(#"{"syncOnSwitch":false,"syncConfirmed":false,"autoSaveLogins":true,"dailyBackup":true,"backupKeep":7,"showNameInMenuBar":true,"hidden":[],"order":[],"pinned":[]}"#.utf8))
     check("older status without the setting means off", oldSettings.liveUsageOn == false)
+
+    print("Auto-switch ranking")
+    let rankTZ = TimeZone(identifier: "Asia/Calcutta")!
+    let day: Double = 86400
+    /// An account as the engine reports it. Defaults: mine, saved login, not current.
+    func acct(_ id: String, name: String = "", owned: Bool = true, savedLogin: Bool = true, current: Bool = false) -> Account {
+        try! JSONDecoder().decode(Account.self, from: Data(("{\"id\": \"\(id)\", \"name\": \"\(name)\", \"sessions\": 1, \"lastUsed\": 0, "
+            + "\"savedLogin\": \(savedLogin), \"savedAt\": 0, \"savedMode\": \"switch\", \"current\": \(current), "
+            + "\"hidden\": false, \"owned\": \(owned)}").utf8))
+    }
+    /// A good live read: 5-hour and weekly percent, and the weekly reset.
+    func weekly(five: Double = 10, week: Double, weekResets: Double?, error: String? = nil, extra: [LiveLimit] = []) -> CachedUsage {
+        CachedUsage(limits: [LiveLimit(kind: "session", percent: five, resetsAt: t0 + 3600, label: nil),
+                             LiveLimit(kind: "weekly_all", percent: week, resetsAt: weekResets, label: nil)] + extra,
+                    readAt: t0, error: error)
+    }
+    func rank(_ accounts: [Account], _ u: [String: CachedUsage]) -> AutoSwitchDecision {
+        AutoSwitch.decide(AutoSwitchInput(accounts: accounts, usage: u, now: t0, timeZone: rankTZ))
+    }
+    let P = "pppp0000-0000-0000-0000-000000000000", Q = "qqqq0000-0000-0000-0000-000000000000"
+    let R = "rrrr0000-0000-0000-0000-000000000000"
+    check("ranking: the soonest weekly reset comes first",
+          rank([acct(P), acct(Q)], [P: weekly(week: 20, weekResets: t0 + 5 * day), Q: weekly(week: 60, weekResets: t0 + 2 * day)])
+            .ranking.map(\.id) == [Q, P])
+    check("ranking: on the same weekly reset, more weekly quota left comes first",
+          rank([acct(P), acct(Q), acct(R)], [P: weekly(week: 70, weekResets: t0 + 2 * day), Q: weekly(week: 30, weekResets: t0 + 2 * day),
+                                            R: weekly(week: 50, weekResets: t0 + 2 * day)]).ranking.map(\.id) == [Q, R, P])
+    // P would be first on every rule; each case breaks one condition of an allowed account.
+    let good = weekly(week: 20, weekResets: t0 + 1 * day), laterReset = weekly(week: 20, weekResets: t0 + 6 * day)
+    func picked(_ p: Account, _ pUsage: CachedUsage?) -> [String] {
+        rank([p, acct(Q)], [Q: laterReset].merging(pUsage.map { [P: $0] } ?? [:]) { a, _ in a }).ranking.map(\.id)
+    }
+    check("allowed: never an account at 100% of its weekly limit", picked(acct(P), weekly(week: 100, weekResets: t0 + day)) == [Q])
+    check("allowed: never an account at 100% of its 5-hour limit", picked(acct(P), weekly(five: 100, week: 20, weekResets: t0 + day)) == [Q])
+    check("allowed: never an account that is not mine", picked(acct(P, owned: false), good) == [Q])
+    check("allowed: never an account without a saved login", picked(acct(P, savedLogin: false), good) == [Q])
+    check("allowed: never an account whose last read failed", picked(acct(P), weekly(week: 20, weekResets: t0 + day, error: "network")) == [Q])
+    check("allowed: never an account with no read", picked(acct(P), nil) == [Q])
+    check("allowed: never the current account", picked(acct(P, current: true), good) == [Q])
+    // t0 is Sunday 3:50 PM in Asia/Calcutta.
+    func reason(_ u: CachedUsage) -> String? { rank([acct(P)], [P: u]).next?.reason }
+    check("reason: the weekday of the weekly reset and the weekly quota left",
+          reason(weekly(week: 60, weekResets: t0 + 4 * day)) == "resets Thu, 40% left")
+    check("reason: a weekly reset later today", reason(weekly(week: 12.4, weekResets: t0 + 3600)) == "resets today, 88% left")
+    check("reason: no weekly reset known", reason(weekly(week: 60, weekResets: nil)) == "40% left")
+    // Property test: 500 random cases from a fixed seed, so a failure repeats.
+    var rng = SplitMix64(seed: 61)
+    var badPick = 0, unstable = 0, orderDependent = 0, misordered = 0
+    for _ in 0..<500 {
+        let n = Int.random(in: 1...6, using: &rng)
+        let accounts = (0..<n).map { i in
+            acct("acct\(i)-0000", owned: Double.random(in: 0..<1, using: &rng) < 0.8, savedLogin: Double.random(in: 0..<1, using: &rng) < 0.8,
+                 current: i == 0 && Bool.random(using: &rng))
+        }
+        func pct() -> Double { [0, 50, 99.6, 100, 104][Int.random(in: 0..<5, using: &rng)] + Double(Int.random(in: 0...40, using: &rng)) * (Bool.random(using: &rng) ? 0 : 1) }
+        var u: [String: CachedUsage] = [:]
+        for a in accounts where Double.random(in: 0..<1, using: &rng) < 0.85 {
+            u[a.id] = weekly(five: pct(), week: pct(),
+                             weekResets: Bool.random(using: &rng) ? t0 + Double(Int.random(in: 0...3, using: &rng)) * day : nil,
+                             error: Double.random(in: 0..<1, using: &rng) < 0.15 ? "network" : nil,
+                             extra: Bool.random(using: &rng) ? [LiveLimit(kind: "weekly_scoped", percent: pct(), resetsAt: nil, label: "Fable")] : [])
+        }
+        let d = rank(accounts, u)
+        for r in d.ranking {
+            let a = accounts.first { $0.id == r.id }, c = u[r.id]
+            let five = c?.limits.first { $0.kind == "session" }?.percent ?? 100, week = c?.limits.first { $0.kind == "weekly_all" }?.percent ?? 100
+            if !(a?.owned == true && a?.savedLogin == true && a?.current == false && c?.error == nil && five < 100 && week < 100) { badPick += 1 }
+        }
+        if rank(accounts, u) != d { unstable += 1 }
+        if rank(accounts.shuffled(using: &rng), u) != d { orderDependent += 1 }
+        for (x, y) in zip(d.ranking, d.ranking.dropFirst())
+        where (x.weeklyResetsAt ?? .infinity, x.weeklyPercent) > (y.weeklyResetsAt ?? .infinity, y.weeklyPercent) { misordered += 1 }
+    }
+    check("property (500 cases): every ranked account is allowed", badPick == 0)
+    check("property (500 cases): the same inputs give the same output", unstable == 0)
+    check("property (500 cases): the order of the accounts does not change the output", orderDependent == 0)
+    check("property (500 cases): soonest weekly reset first, then more quota left", misordered == 0)
+    check("allowed: a model limit at 100% is ignored", picked(acct(P), weekly(week: 20, weekResets: t0 + day,
+          extra: [LiveLimit(kind: "weekly_scoped", percent: 100, resetsAt: t0 + 0.5 * day, label: "Fable")])) == [P, Q])
+
+    print("Usage history")
+    let goodRead = LiveAccountUsage(ok: true, limits: [LiveLimit(kind: "session", percent: 42, resetsAt: nil, label: nil),
+                                                       LiveLimit(kind: "weekly_all", percent: 16, resetsAt: nil, label: nil),
+                                                       LiveLimit(kind: "weekly_scoped", percent: 90, resetsAt: nil, label: "Fable")], error: nil)
+    let h1 = UsageHistory.record([], reads: [P: goodRead, Q: .failed("network")], now: t0)
+    check("history: a good read stores one reading (time, account, 5-hour and weekly percent)",
+          h1 == [UsageReading(at: t0, account: P, fivePercent: 42, weeklyPercent: 16)])
+    check("history: a failed read stores nothing", !h1.contains { $0.account == Q })
+    let h2 = UsageHistory.record(h1, reads: [P: goodRead, Q: goodRead], now: t0 + 600)
+    check("history: every account with a good read gets a reading", h2.count == 3 && h2.filter { $0.at == t0 + 600 }.map(\.account).sorted() == [P, Q])
+    let noFive = LiveAccountUsage(ok: true, limits: [LiveLimit(kind: "weekly_all", percent: 16, resetsAt: nil, label: nil)], error: nil)
+    check("history: no 5-hour limit in the read (no session started) is 0%",
+          UsageHistory.record([], reads: [P: noFive], now: t0).first?.fivePercent == 0)
+    check("history: a read without a weekly limit stores nothing",
+          UsageHistory.record([], reads: [P: LiveAccountUsage(ok: true, limits: [], error: nil)], now: t0).isEmpty)
+    let old = [UsageReading(at: t0 - 35 * day - 1, account: P, fivePercent: 1, weeklyPercent: 1),
+               UsageReading(at: t0 - 35 * day, account: P, fivePercent: 2, weeklyPercent: 2)]
+    check("history: readings older than 35 days are removed, 35 days are kept",
+          UsageHistory.record(old, reads: [:], now: t0).map(\.fivePercent) == [2])
+    let stored = UsageHistory.encode(h2)
+    check("history: the stored form reads back", UsageHistory.decode(stored) == h2)
+    check("history: the stored form groups by account (small enough for the app's preferences)",
+          (try? JSONSerialization.jsonObject(with: stored) as? [String: [[Double]]])?[P]?.count == 2)
+    check("history: an unreadable stored form is an empty history", UsageHistory.decode(Data("x".utf8)).isEmpty)
 
     print("Promotion (star request, what's new)")
     check("no star request before 10 successful switches", !Promotion.shouldAskForStar(successfulSwitches: 9, answered: false))

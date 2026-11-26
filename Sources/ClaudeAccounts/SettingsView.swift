@@ -79,7 +79,7 @@ struct GeneralTab: View {
                 Toggle(isOn: Binding(get: { store.usageWarningOn }, set: { store.setUsageWarning($0) })) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Warn at 90% of the 5-hour limit")
-                        Text("A notification names your account with the most free capacity, with a Switch button. Once for each 5-hour window.")
+                        Text("A notification names your next account (soonest weekly reset first), with a Switch button. Once for each 5-hour window.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }

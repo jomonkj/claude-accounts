@@ -61,7 +61,7 @@ All of this comes from files on your Mac.
 New in 1.3:
 
 - **Live usage (off by default).** Turn it on with the **Usage** button in the panel, or in Settings → Accounts. Each account then shows a bar for each limit on its claude.ai Usage page: 5-hour, weekly, and model limits such as Fable. A bar turns orange at 70% and red at 90%, and then shows when the limit resets. See [Live usage](#live-usage).
-- **Warning at 90%.** When the active account reaches 90% of its 5-hour limit, a notification names your account with the most free capacity, with a Switch button. Once for each 5-hour window. Turn it off in Settings → General.
+- **Warning at 90%.** When the active account reaches 90% of its 5-hour limit, a notification names your next account (the soonest weekly reset first, then more weekly quota left), with a Switch button. Once for each 5-hour window. Turn it off in Settings → General.
 - **Cleaner panel.** The active account is tinted, a key marks a saved login, and opening Settings closes the panel.
 
 <picture>
